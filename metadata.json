@@ -1,0 +1,5 @@
+{
+  "name": "AI Agent build",
+  "description": "A premium, dark-themed web application for building, managing, and deploying AI agents. Features include a multi-panel agent builder, agent history vault, pricing, documentation, and user settings.",
+  "requestFramePermissions": []
+}
