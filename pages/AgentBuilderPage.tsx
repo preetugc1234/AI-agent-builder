@@ -102,9 +102,9 @@ const IntegrationManager: React.FC = () => (
     <div className="p-4 overflow-y-auto h-full">
         <div className="grid grid-cols-3 gap-3">
             {integrationsList.map(name => (
-                <div key={name} className="card-hover bg-background p-4 rounded-md border border-border flex flex-col items-center justify-between aspect-square text-center">
-                    <div className="flex-grow flex items-center justify-center w-12 h-12">
-                         {integrationLogos[name] || <div className="w-8 h-8 bg-muted rounded-md" />}
+                <div key={name} className="card-hover bg-background p-3 rounded-md border border-border flex flex-col items-center justify-between aspect-square text-center">
+                    <div className="flex-grow flex items-center justify-center w-8 h-8">
+                         {integrationLogos[name] || <div className="w-6 h-6 bg-muted rounded-md" />}
                     </div>
                     <span className="text-xs font-medium my-2 w-full truncate">{name}</span>
                     <button className="text-xs px-3 py-1.5 rounded-md bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/30 hover:text-foreground transition-colors w-full">
@@ -210,17 +210,17 @@ const AgentVisualizer: React.FC = () => (
         <div className="relative w-full h-full">
             {/* Lines */}
             <svg className="absolute inset-0 w-full h-full" fill="none">
-                <path d="M 80 80 C 180 80, 180 160, 280 160" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
-                <path d="M 280 190 C 180 190, 180 280, 80 280" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
+                <path d="M 144 92 C 212 92, 212 188, 280 188" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
+                <path d="M 280 188 C 212 188, 212 284, 144 284" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
             </svg>
             {/* Nodes */}
-            <div className="absolute top-16 left-4 bg-background border border-border p-3 rounded-md text-xs w-32">
+            <div className="absolute top-[63px] left-4 bg-background border border-border p-3 rounded-md text-xs w-32">
                 <p className="font-bold">On Message</p><p className="text-muted-foreground">Trigger</p>
             </div>
-            <div className="absolute top-[132px] left-[280px] bg-background border-2 border-primary p-3 rounded-md text-xs w-32 shadow-lg shadow-primary/20">
+            <div className="absolute top-[159px] left-[280px] bg-background border-2 border-primary p-3 rounded-md text-xs w-32 shadow-lg shadow-primary/20">
                 <p className="font-bold">Fetch Prices</p><p className="text-muted-foreground">Tool Call</p>
             </div>
-            <div className="absolute top-64 left-4 bg-background border border-border p-3 rounded-md text-xs w-32">
+            <div className="absolute top-[255px] left-4 bg-background border border-border p-3 rounded-md text-xs w-32">
                 <p className="font-bold">Send Alert</p><p className="text-muted-foreground">Slack Integration</p>
             </div>
         </div>

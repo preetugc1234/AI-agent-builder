@@ -1,6 +1,9 @@
 import React from 'react';
 
-const StatusBadge: React.FC<{ status: 'Running' | 'Success' | 'Failed' }> = ({ status }) => {
+// FIX: Define a union type for agent statuses to ensure type safety and reusability.
+type AgentStatus = 'Running' | 'Success' | 'Failed';
+
+const StatusBadge: React.FC<{ status: AgentStatus }> = ({ status }) => {
   const colors = {
     Running: 'bg-blue-500/20 text-blue-400',
     Success: 'bg-green-500/20 text-green-400',
@@ -13,7 +16,16 @@ const StatusBadge: React.FC<{ status: 'Running' | 'Success' | 'Failed' }> = ({ s
   );
 };
 
-const AgentCard: React.FC<{ name: string; lastRun: string; status: 'Running' | 'Success' | 'Failed'; successRate: number; timeSaved: string }> = (
+// FIX: Define a type for the Agent object to be used in AgentCard and the agents array.
+type Agent = {
+  name: string;
+  lastRun: string;
+  status: AgentStatus;
+  successRate: number;
+  timeSaved: string;
+};
+
+const AgentCard: React.FC<Agent> = (
   { name, lastRun, status, successRate, timeSaved }
 ) => (
   <div className="card-hover bg-muted p-5 rounded-md border border-border flex flex-col justify-between">
@@ -37,7 +49,8 @@ const AgentCard: React.FC<{ name: string; lastRun: string; status: 'Running' | '
 );
 
 const HistoryPage: React.FC = () => {
-  const agents = [
+  // FIX: Explicitly type the agents array with the Agent type to resolve the type mismatch.
+  const agents: Agent[] = [
     { name: 'Financial Analyst', lastRun: '2h ago', status: 'Success', successRate: 98, timeSaved: '4.2h' },
     { name: 'Content Summarizer', lastRun: '5h ago', status: 'Success', successRate: 99, timeSaved: '11.5h' },
     { name: 'DevOps Manager', lastRun: '15m ago', status: 'Running', successRate: 92, timeSaved: '23.1h' },
