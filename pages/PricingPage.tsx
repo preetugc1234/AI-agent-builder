@@ -94,7 +94,7 @@ const PricingPage: React.FC = () => {
                         <span className="text-sm text-muted-foreground ml-1.5">/ MONTH</span>
                     </div>
                     <ul className="space-y-3 mb-8 flex-grow">
-                        {['150 free credits / month', 'Standard agent creation', 'Supabase integration', 'GitHub deployment'].map(feature => (
+                        {['10 executions / month', '150 free credits / month', 'Standard agent creation', 'Supabase integration', 'GitHub deployment'].map(feature => (
                             <li key={feature} className="flex items-start gap-3"><CheckIcon /><span className="text-sm">{feature}</span></li>
                         ))}
                     </ul>
@@ -124,7 +124,7 @@ const PricingPage: React.FC = () => {
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">Everything in Launch, plus:</p>
                     <ul className="space-y-3 mb-8 flex-grow">
-                        {['Unlimited integrations', 'Custom UI Builder', 'Vercel & Render deployments', 'Priority Support & Error Resolution'].map(feature => (
+                        {['10,000 executions / month', 'Unlimited integrations', 'Custom UI Builder', 'Vercel & Render deployments', 'Priority Support & Error Resolution'].map(feature => (
                             <li key={feature} className="flex items-start gap-3"><CheckIcon /><span className="text-sm">{feature}</span></li>
                         ))}
                     </ul>
@@ -142,7 +142,7 @@ const PricingPage: React.FC = () => {
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">Everything in Grow, plus:</p>
                     <ul className="space-y-3 mb-8 flex-grow">
-                        {['Dedicated infrastructure', 'Advanced Security & Compliance', 'Custom model training', '24/7 enterprise-grade support'].map(feature => (
+                        {['Unlimited executions / month', 'Dedicated infrastructure', 'Advanced Security & Compliance', 'Custom model training', '24/7 enterprise-grade support'].map(feature => (
                             <li key={feature} className="flex items-start gap-3"><CheckIcon /><span className="text-sm">{feature}</span></li>
                         ))}
                     </ul>
