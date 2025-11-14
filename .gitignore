@@ -26,3 +26,10 @@ dist-ssr
 # Credentials (local only)
 credentials.txt
 BACKEND_URL.txt
+YOUR-GITHUB-SECRETS.txt
+
+# Debug and temporary files
+stack-events*.json
+temp_*.txt
+temp_*.json
+temp-task-def.json
