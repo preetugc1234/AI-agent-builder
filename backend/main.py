@@ -30,18 +30,33 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting VibeAgent Forge Backend...")
 
-    # Create database tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Create database tables with retry logic
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Attempting to connect to database (attempt {attempt + 1}/{max_retries})...")
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("✅ Database tables created")
+            break
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+            if attempt < max_retries - 1:
+                import asyncio
+                await asyncio.sleep(5)
+            else:
+                logger.warning("⚠️ Database connection failed after retries. Starting without database...")
 
-    logger.info("✅ Database tables created")
     logger.info("✅ VibeAgent Forge Backend is ready!")
 
     yield
 
     # Shutdown
     logger.info("🔄 Shutting down VibeAgent Forge Backend...")
-    await engine.dispose()
+    try:
+        await engine.dispose()
+    except Exception as e:
+        logger.error(f"Error disposing engine: {e}")
     logger.info("✅ Shutdown complete")
 
 
