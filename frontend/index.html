@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vibe-to-Deploy Agent Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cabin:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Cabin', 'sans-serif'],
+            },
+            letterSpacing: {
+              'wide-custom': '-0.015em',
+            },
+            colors: {
+              background: '#0a0a0a',
+              foreground: '#ffffff',
+              muted: '#1a1a1a',
+              'muted-foreground': 'rgba(255, 255, 255, 0.5)',
+              primary: {
+                DEFAULT: '#ffffff',
+                foreground: '#0a0a0a',
+              },
+              border: 'rgba(255, 255, 255, 0.1)',
+            },
+            borderRadius: {
+              lg: '10px',
+              md: '10px',
+              sm: '10px'
+            },
+            borderColor: {
+              DEFAULT: 'rgba(255, 255, 255, 0.1)'
+            },
+            borderWidth: {
+              DEFAULT: '0.4px',
+              '0': '0',
+              '2': '2px',
+              '4': '4px',
+              '8': '8px',
+            },
+            boxShadow: {
+              'primary-glow': '0 10px 30px -10px rgba(255, 255, 255, 0.1)',
+            },
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #0a0a0a;
+        color: #ffffff;
+        font-family: 'Cabin', sans-serif;
+      }
+      .glassmorphism {
+        background: rgba(10, 10, 10, 0.5);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+       .card-hover {
+        transition: all 0.3s ease;
+        border: 0.4px solid rgba(255,255,255,0.1);
+      }
+      .card-hover:hover {
+        transform: translateY(-4px);
+        border-color: rgba(255, 255, 255, 0.3);
+        box-shadow: 0 10px 30px -10px rgba(255, 255, 255, 0.1);
+      }
+      .gradient-border {
+        position: relative;
+        background: #1a1a1a;
+        border-radius: 10px;
+        padding: 0.4px;
+      }
+      .gradient-border > * {
+        background: #1a1a1a;
+        border-radius: 10px;
+      }
+      .gradient-border::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 10px;
+        padding: 0.4px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), transparent, transparent, rgba(255, 255, 255, 0.3));
+        -webkit-mask: 
+           linear-gradient(#fff 0 0) content-box, 
+           linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+                mask-composite: exclude;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      .gradient-border:hover::before {
+        opacity: 1;
+      }
+      .bg-grid-pattern {
+        background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+      
+      @keyframes marquee-left {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+      }
+      .animate-marquee-left {
+        animation: marquee-left 80s linear infinite;
+        will-change: transform;
+      }
+
+      @keyframes marquee-right {
+        from { transform: translateX(-50%); }
+        to { transform: translateX(0); }
+      }
+      .animate-marquee-right {
+        animation: marquee-right 80s linear infinite;
+        will-change: transform;
+      }
+      .marquee-container {
+        -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+        mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+      }
+      .testimonial-card-fade {
+        -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+        mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.5"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
