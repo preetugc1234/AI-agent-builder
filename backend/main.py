@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
@@ -42,7 +43,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
             if attempt < max_retries - 1:
-                import asyncio
                 await asyncio.sleep(5)
             else:
                 logger.warning("⚠️ Database connection failed after retries. Starting without database...")
