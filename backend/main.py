@@ -12,10 +12,11 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.api import agents, auth, integrations, execution, deployments
-from app.websockets.manager import manager
-from app.websockets.handlers import handle_websocket_message
-from app.db.database import init_database, engine, Base
+# Temporarily disable API imports to isolate issues
+# from app.api import agents, auth, integrations, execution, deployments
+# from app.websockets.manager import manager
+# from app.websockets.handlers import handle_websocket_message
+# from app.db.database import init_database, engine, Base
 
 # Configure logging
 logging.basicConfig(
@@ -29,39 +30,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifespan events - startup and shutdown"""
     # Startup
-    logger.info("🚀 Starting VibeAgent Forge Backend...")
-
-    # Initialize database with retry logic
-    max_retries = 3
-    db_initialized = False
-
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Attempting to initialize database (attempt {attempt + 1}/{max_retries})...")
-            if init_database():
-                async with engine.begin() as conn:
-                    await conn.run_sync(Base.metadata.create_all)
-                logger.info("✅ Database initialized and tables created")
-                db_initialized = True
-                break
-        except Exception as e:
-            logger.error(f"Database initialization failed: {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(5)
-
-    if not db_initialized:
-        logger.warning("⚠️ Starting without database. Application will run with limited functionality.")
-
-    logger.info("✅ VibeAgent Forge Backend is ready!")
+    logger.info("🚀 Starting VibeAgent Forge Backend (MINIMAL MODE)...")
+    logger.info("✅ Backend ready - Health endpoint only!")
 
     yield
 
     # Shutdown
-    logger.info("🔄 Shutting down VibeAgent Forge Backend...")
-    try:
-        await engine.dispose()
-    except Exception as e:
-        logger.error(f"Error disposing engine: {e}")
     logger.info("✅ Shutdown complete")
 
 
@@ -104,41 +78,28 @@ async def root():
     }
 
 
-# WebSocket endpoint for real-time agent operations
-@app.websocket("/ws/agent/{agent_id}")
-async def websocket_agent_endpoint(websocket: WebSocket, agent_id: str):
-    """
-    WebSocket endpoint for real-time agent operations
-    - AI code generation streaming
-    - Agent execution monitoring
-    - Deployment progress tracking
-    - Terminal output streaming
-    """
-    connection_id = await manager.connect(websocket, agent_id)
-    logger.info(f"WebSocket connected: {connection_id} for agent: {agent_id}")
-
-    try:
-        while True:
-            # Receive messages from frontend
-            data = await websocket.receive_json()
-
-            # Handle the message
-            await handle_websocket_message(agent_id, connection_id, data)
-
-    except WebSocketDisconnect:
-        await manager.disconnect(websocket, connection_id)
-        logger.info(f"WebSocket disconnected: {connection_id}")
-    except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}")
-        await manager.disconnect(websocket, connection_id)
+# WebSocket endpoint - TEMPORARILY DISABLED
+# @app.websocket("/ws/agent/{agent_id}")
+# async def websocket_agent_endpoint(websocket: WebSocket, agent_id: str):
+#     connection_id = await manager.connect(websocket, agent_id)
+#     logger.info(f"WebSocket connected: {connection_id} for agent: {agent_id}")
+#     try:
+#         while True:
+#             data = await websocket.receive_json()
+#             await handle_websocket_message(agent_id, connection_id, data)
+#     except WebSocketDisconnect:
+#         await manager.disconnect(websocket, connection_id)
+#     except Exception as e:
+#         logger.error(f"WebSocket error: {str(e)}")
+#         await manager.disconnect(websocket, connection_id)
 
 
-# Include API routers
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
-app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
-app.include_router(execution.router, prefix="/api/execution", tags=["Execution"])
-app.include_router(deployments.router, prefix="/api/deployments", tags=["Deployments"])
+# Include API routers - TEMPORARILY DISABLED
+# app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+# app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
+# app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
+# app.include_router(execution.router, prefix="/api/execution", tags=["Execution"])
+# app.include_router(deployments.router, prefix="/api/deployments", tags=["Deployments"])
 
 
 # Error handlers
