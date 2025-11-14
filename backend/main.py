@@ -12,7 +12,8 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.db.database import init_database, engine, Base
+# Database will be added when we add API routers
+# from app.db.database import init_database, engine, Base
 # Temporarily disable API imports to isolate issues
 # from app.api import agents, auth, integrations, execution, deployments
 # from app.websockets.manager import manager
@@ -30,33 +31,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifespan events - startup and shutdown"""
     # Startup
-    logger.info("🚀 Starting VibeAgent Forge Backend...")
-
-    # Try to initialize database (non-blocking)
-    db_status = "disconnected"
-    try:
-        if init_database():
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            db_status = "connected"
-            logger.info("✅ Database connected and initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Database not available: {e}")
-        logger.info("✅ Starting without database (limited functionality)")
-
-    # Store DB status globally for health check
-    app.state.db_status = db_status
+    logger.info("🚀 Starting VibeAgent Forge Backend (Minimal - Working Version)...")
     logger.info("✅ Backend ready!")
 
     yield
 
     # Shutdown
-    logger.info("🔄 Shutting down...")
-    if engine:
-        try:
-            await engine.dispose()
-        except:
-            pass
     logger.info("✅ Shutdown complete")
 
 
@@ -85,8 +65,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "vibeagent-forge-backend",
-        "version": "1.0.0",
-        "database": getattr(app.state, 'db_status', 'unknown')
+        "version": "1.0.0"
     }
 
 
