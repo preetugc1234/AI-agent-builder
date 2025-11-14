@@ -45,6 +45,10 @@ jobs:
         aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} || \
         aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }}
 
+    - name: Create CloudWatch log group if not exists
+      run: |
+        aws logs create-log-group --log-group-name /ecs/vibeagent-backend 2>/dev/null || true
+
     - name: Build Docker image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -65,19 +69,32 @@ jobs:
     - name: Update ECS task definition
       id: task-def
       run: |
-        # Download current task definition
+        # Get IAM roles from CloudFormation
+        STACK_RESOURCES=$(aws cloudformation describe-stack-resources \
+          --stack-name vibeagent-infrastructure \
+          --output json)
+
+        EXECUTION_ROLE=$(echo "$STACK_RESOURCES" | jq -r '.StackResources[] | select(.LogicalResourceId=="ECSTaskExecutionRole") | .PhysicalResourceId')
+        TASK_ROLE=$(echo "$STACK_RESOURCES" | jq -r '.StackResources[] | select(.LogicalResourceId=="ECSTaskRole") | .PhysicalResourceId')
+
+        ACCOUNT_ID=${{ steps.account.outputs.ACCOUNT_ID }}
+
+        # Download current task definition or use template
         aws ecs describe-task-definition \
           --task-definition ${{ env.ECS_TASK_DEFINITION }} \
           --query taskDefinition > task-definition.json 2>/dev/null || \
         cat aws/ecs-task-definition.json > task-definition.json
 
-        # Update image in task definition
+        # Update image, roles, and account ID in task definition
         ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG=${{ github.sha }}
 
         cat task-definition.json | \
+        sed "s/YOUR_ACCOUNT_ID/$ACCOUNT_ID/g" | \
         jq --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-           '.containerDefinitions[0].image = $IMAGE' | \
+           --arg EXEC_ROLE "arn:aws:iam::$ACCOUNT_ID:role/$EXECUTION_ROLE" \
+           --arg TASK_ROLE "arn:aws:iam::$ACCOUNT_ID:role/$TASK_ROLE" \
+           '.containerDefinitions[0].image = $IMAGE | .executionRoleArn = $EXEC_ROLE | .taskRoleArn = $TASK_ROLE' | \
         jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
         > new-task-definition.json
 
