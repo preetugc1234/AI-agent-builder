@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(aws configure set:*)",
+      "Bash(git reset:*)",
+      "Bash(.gitignore)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
