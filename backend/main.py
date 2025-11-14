@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.api import agents, auth, integrations, execution, deployments
 from app.websockets.manager import manager
 from app.websockets.handlers import handle_websocket_message
-from app.db.database import engine, Base
+from app.db.database import init_database, engine, Base
 
 # Configure logging
 logging.basicConfig(
@@ -31,21 +31,26 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting VibeAgent Forge Backend...")
 
-    # Create database tables with retry logic
+    # Initialize database with retry logic
     max_retries = 3
+    db_initialized = False
+
     for attempt in range(max_retries):
         try:
-            logger.info(f"Attempting to connect to database (attempt {attempt + 1}/{max_retries})...")
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            logger.info("✅ Database tables created")
-            break
+            logger.info(f"Attempting to initialize database (attempt {attempt + 1}/{max_retries})...")
+            if init_database():
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+                logger.info("✅ Database initialized and tables created")
+                db_initialized = True
+                break
         except Exception as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.error(f"Database initialization failed: {e}")
             if attempt < max_retries - 1:
                 await asyncio.sleep(5)
-            else:
-                logger.warning("⚠️ Database connection failed after retries. Starting without database...")
+
+    if not db_initialized:
+        logger.warning("⚠️ Starting without database. Application will run with limited functionality.")
 
     logger.info("✅ VibeAgent Forge Backend is ready!")
 
