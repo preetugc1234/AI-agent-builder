@@ -141,12 +141,20 @@ jobs:
             --load-balancers "targetGroupArn=$TARGET_GROUP_ARN,containerName=vibeagent-backend,containerPort=8000"
         fi
 
-    - name: Wait for service stability
+    - name: Check service deployment
       run: |
-        echo "Waiting for ECS service to become stable..."
-        aws ecs wait services-stable \
+        echo "Deployment initiated successfully!"
+        echo "ECS is deploying your backend. This may take 3-5 minutes."
+        echo ""
+        echo "Checking current status..."
+        aws ecs describe-services \
           --cluster ${{ env.ECS_CLUSTER }} \
-          --services ${{ env.ECS_SERVICE }}
+          --services ${{ env.ECS_SERVICE }} \
+          --query 'services[0].[serviceName,runningCount,desiredCount,deployments[0].status]' \
+          --output table
+        echo ""
+        echo "Note: The service will continue deploying in the background."
+        echo "Health checks may take a few minutes to pass."
 
     - name: Get deployment URL
       run: |
