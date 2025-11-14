@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
+        "https://noderush.vercel.app",
         "https://vibeagent-forge.vercel.app"
     ]
 
