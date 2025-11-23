@@ -38,9 +38,15 @@ class Agent(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     vibe_prompt = Column(Text, nullable=False)
-    generated_code = Column(Text, nullable=True)
+    # 3-Agent outputs
+    architecture = Column(Text, nullable=True)  # Agent 1 output
+    generated_code = Column(Text, nullable=True)  # Agent 2 output
+    review_notes = Column(Text, nullable=True)  # Agent 3 output
+    final_code = Column(Text, nullable=True)  # Final reviewed code
+    file_structure = Column(JSON, default=list)  # Extracted file structure
+
     docker_image_url = Column(String(500), nullable=True)
-    status = Column(String(50), default="draft")  # draft, ready, deployed, error
+    status = Column(String(50), default="draft")  # draft, generating, ready, deployed, error
     integrations = Column(JSON, default=list)
     flow_data = Column(JSON, default=dict)  # Store flow diagram data
     created_at = Column(DateTime(timezone=True), server_default=func.now())

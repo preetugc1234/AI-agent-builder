@@ -1,16 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git checkout:*)",
-      "Bash(aws configure set:*)",
-      "Bash(git reset:*)",
-      "Bash(.gitignore)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(aws rds describe-db-engine-versions --engine postgres --query \"DBEngineVersions[?EngineVersion>=''15.0''].EngineVersion\" --output table --region us-east-1)",
-      "Bash(deploy-full-infrastructure.bat)",
-      "Bash(finish-secrets.bat)"
+      "Bash(aws elbv2 describe-target-health:*)",
+      "Bash(aws ecs describe-task-definition:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

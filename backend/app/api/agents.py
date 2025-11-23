@@ -2,16 +2,27 @@
 Agents API routes
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from pydantic import BaseModel
+import logging
 
 from app.db.database import get_db
 from app.models.models import User, Agent
 from app.schemas.schemas import AgentCreate, AgentUpdate, AgentResponse
 from app.api.auth import get_current_user
+from app.services.three_agent_service import three_agent_service
+
+logger = logging.getLogger(__name__)
+
+
+class GenerateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    vibe_prompt: str
 
 router = APIRouter()
 
@@ -152,8 +163,7 @@ async def generate_agent_code(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Trigger AI code generation for an agent
-    This endpoint triggers the WebSocket workflow
+    Trigger AI code generation for an agent using 3-agent workflow
     """
     result = await db.execute(
         select(Agent).where(Agent.id == agent_id, Agent.user_id == current_user.id)
@@ -166,10 +176,99 @@ async def generate_agent_code(
             detail="Agent not found"
         )
 
-    # The actual generation happens via WebSocket
-    # This endpoint just validates and returns success
-    return {
-        "message": "Code generation started",
-        "agent_id": str(agent_id),
-        "status": "generating"
-    }
+    # Update status to generating
+    agent.status = "generating"
+    await db.commit()
+
+    try:
+        # Run 3-agent generation
+        generation_result = await three_agent_service.generate_agent(agent.vibe_prompt)
+
+        # Update agent with results
+        agent.architecture = generation_result["architecture"]
+        agent.generated_code = generation_result["generated_code"]
+        agent.review_notes = generation_result["review_notes"]
+        agent.final_code = generation_result["final_code"]
+        agent.file_structure = generation_result["file_structure"]
+        agent.integrations = generation_result["integrations"]
+        agent.status = "ready"
+        await db.commit()
+        await db.refresh(agent)
+
+        return {
+            "message": "Code generation completed",
+            "agent_id": str(agent_id),
+            "status": "ready",
+            "file_structure": agent.file_structure,
+            "integrations": agent.integrations
+        }
+
+    except Exception as e:
+        logger.error(f"Generation failed: {e}")
+        agent.status = "error"
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/generate")
+async def generate_new_agent(
+    request: GenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Create a new agent and run 3-agent generation in one call
+    """
+    # Create agent
+    new_agent = Agent(
+        user_id=current_user.id,
+        name=request.name,
+        description=request.description,
+        vibe_prompt=request.vibe_prompt,
+        status="generating",
+        integrations=[],
+        flow_data={}
+    )
+
+    db.add(new_agent)
+    await db.commit()
+    await db.refresh(new_agent)
+
+    try:
+        # Run 3-agent generation
+        generation_result = await three_agent_service.generate_agent(request.vibe_prompt)
+
+        # Update agent with results
+        new_agent.architecture = generation_result["architecture"]
+        new_agent.generated_code = generation_result["generated_code"]
+        new_agent.review_notes = generation_result["review_notes"]
+        new_agent.final_code = generation_result["final_code"]
+        new_agent.file_structure = generation_result["file_structure"]
+        new_agent.integrations = generation_result["integrations"]
+        new_agent.status = "ready"
+        await db.commit()
+        await db.refresh(new_agent)
+
+        return {
+            "id": str(new_agent.id),
+            "name": new_agent.name,
+            "status": "ready",
+            "architecture": new_agent.architecture,
+            "generated_code": new_agent.generated_code,
+            "review_notes": new_agent.review_notes,
+            "final_code": new_agent.final_code,
+            "file_structure": new_agent.file_structure,
+            "integrations": new_agent.integrations
+        }
+
+    except Exception as e:
+        logger.error(f"Generation failed: {e}")
+        new_agent.status = "error"
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )

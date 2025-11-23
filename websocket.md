@@ -743,3 +743,656 @@ Smooth UX: Instant feedback for all operations
 Scalable: Redis Pub/Sub for multiple backend instances
 
 Reliable: Connection management with reconnection logic
+
+Real-Time Agent Flow Visualization (100% Free)
+🎯 Tech Stack for Flow Visualization
+Free Open-Source Libraries:
+text
+Frontend Flow Library: React Flow (MIT License) - COMPLETELY FREE
+WebSocket: Native WebSocket API + FastAPI WebSockets - FREE
+Backend: Python + FastAPI - FREE
+Real-time Updates: WebSockets - FREE
+Deployment: AWS Free Tier - FREE
+🏗️ Real-time Flow Architecture
+System Architecture:
+text
+┌─────────────────┐    WebSocket    ┌─────────────────┐
+│   Frontend      │ ◄─────────────► │   Backend       │
+│   React Flow    │                 │   FastAPI       │
+│   Visualization │                 │   WebSockets    │
+└─────────────────┘                 └─────────────────┘
+         │                                    │
+         │                                    │
+         ▼                                    ▼
+┌─────────────────┐                 ┌─────────────────┐
+│   Real-time     │                 │   AI Service    │
+│   Node Updates  │                 │   Nemotron      │
+│   & Connections │                 │   Generation    │
+└─────────────────┘                 └─────────────────┘
+🔧 Implementation
+1. Frontend - React Flow Setup
+typescript
+// components/AgentFlowVisualizer.tsx
+import React, { useCallback, useEffect } from 'react';
+import ReactFlow, {
+  Node,
+  Edge,
+  addEdge,
+  Connection,
+  useNodesState,
+  useEdgesState,
+  Background,
+  Controls,
+  MiniMap,
+  NodeTypes
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
+// Custom Node Components
+const InputNode = ({ data }: any) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
+    <div className="font-bold">{data.label}</div>
+    <div className="text-gray-500 text-xs">Input</div>
+  </div>
+);
+
+const IntegrationNode = ({ data }: any) => (
+  <div className={`px-4 py-2 shadow-md rounded-md border-2 ${
+    data.status === 'running' ? 'border-yellow-400 bg-yellow-50' :
+    data.status === 'success' ? 'border-green-400 bg-green-50' :
+    data.status === 'error' ? 'border-red-400 bg-red-50' :
+    'border-blue-400 bg-blue-50'
+  }`}>
+    <div className="font-bold">{data.label}</div>
+    <div className="text-gray-500 text-xs capitalize">{data.status || 'pending'}</div>
+  </div>
+);
+
+const OutputNode = ({ data }: any) => (
+  <div className="px-4 py-2 shadow-md rounded-md bg-white border-2 border-stone-400">
+    <div className="font-bold">{data.label}</div>
+    <div className="text-gray-500 text-xs">Output</div>
+  </div>
+);
+
+const nodeTypes: NodeTypes = {
+  input: InputNode,
+  integration: IntegrationNode,
+  output: OutputNode,
+};
+
+interface AgentFlowVisualizerProps {
+  agentId: string;
+}
+
+export const AgentFlowVisualizer: React.FC<AgentFlowVisualizerProps> = ({ agentId }) => {
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  // WebSocket for real-time updates
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/agent/${agentId}`);
+    
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      switch (message.type) {
+        case 'agent-flow-update':
+          setNodes(message.nodes);
+          setEdges(message.connections);
+          break;
+          
+        case 'agent-node-status':
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (node.id === message.nodeId) {
+                return {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    status: message.status,
+                    output: message.output
+                  }
+                };
+              }
+              return node;
+            })
+          );
+          break;
+          
+        case 'ai-generation-integration-detected':
+          // Add new integration nodes dynamically
+          addIntegrationNodes(message.integrations);
+          break;
+      }
+    };
+    
+    return () => ws.close();
+  }, [agentId]);
+
+  const addIntegrationNodes = (integrations: string[]) => {
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+    
+    integrations.forEach((integration, index) => {
+      const nodeId = `integration_${integration}`;
+      
+      newNodes.push({
+        id: nodeId,
+        type: 'integration',
+        data: { 
+          label: integration.replace(/_/g, ' ').toUpperCase(),
+          status: 'pending'
+        },
+        position: { x: 300, y: 100 + (index * 120) }
+      });
+      
+      // Connect from input to this integration
+      newEdges.push({
+        id: `conn_input_${integration}`,
+        source: 'input',
+        target: nodeId,
+        type: 'smoothstep'
+      });
+      
+      // Connect from this integration to output
+      newEdges.push({
+        id: `conn_${integration}_output`,
+        source: nodeId,
+        target: 'output', 
+        type: 'smoothstep'
+      });
+    });
+    
+    setNodes((nds) => [...nds, ...newNodes]);
+    setEdges((eds) => [...eds, ...newEdges]);
+  };
+
+  const onConnect = useCallback(
+    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges]
+  );
+
+  return (
+    <div className="h-full w-full bg-gray-50 rounded-lg">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        fitView
+      >
+        <Background />
+        <Controls />
+        <MiniMap />
+      </ReactFlow>
+    </div>
+  );
+};
+2. Backend - Real-time Flow Generator
+python
+# workflows/flow_generator.py
+import asyncio
+from typing import List, Dict, Any
+import uuid
+
+class RealTimeFlowGenerator:
+    def __init__(self, agent_id: str):
+        self.agent_id = agent_id
+        self.current_nodes = []
+        self.current_edges = []
+    
+    async def generate_initial_flow(self):
+        """Create initial flow structure"""
+        initial_nodes = [
+            {
+                "id": "input",
+                "type": "input",
+                "data": {"label": "User Input"},
+                "position": {"x": 100, "y": 250}
+            },
+            {
+                "id": "output", 
+                "type": "output",
+                "data": {"label": "Agent Output"},
+                "position": {"x": 800, "y": 250}
+            }
+        ]
+        
+        await self._update_flow(initial_nodes, [])
+    
+    async def add_integration_node(self, integration: str, position_x: int = 400):
+        """Add a new integration node to the flow"""
+        node_id = f"integration_{integration}"
+        
+        new_node = {
+            "id": node_id,
+            "type": "integration",
+            "data": {
+                "label": integration.replace('_', ' ').title(),
+                "status": "pending"
+            },
+            "position": {"x": position_x, "y": self._calculate_y_position()}
+        }
+        
+        # Create connections
+        new_edges = [
+            {
+                "id": f"conn_input_{integration}",
+                "source": "input",
+                "target": node_id,
+                "type": "smoothstep"
+            },
+            {
+                "id": f"conn_{integration}_output", 
+                "source": node_id,
+                "target": "output",
+                "type": "smoothstep"
+            }
+        ]
+        
+        self.current_nodes.append(new_node)
+        self.current_edges.extend(new_edges)
+        
+        await self._update_flow(self.current_nodes, self.current_edges)
+    
+    async def update_node_status(self, node_id: str, status: str, output: Any = None):
+        """Update node status in real-time"""
+        updated_nodes = []
+        
+        for node in self.current_nodes:
+            if node["id"] == node_id:
+                node["data"]["status"] = status
+                if output:
+                    node["data"]["output"] = output
+            
+            updated_nodes.append(node)
+        
+        self.current_nodes = updated_nodes
+        await self._update_flow(self.current_nodes, self.current_edges)
+        
+        # Also send individual node update for real-time effects
+        await self._send_node_status_update(node_id, status, output)
+    
+    async def add_processing_step(self, step_name: str, dependencies: List[str] = None):
+        """Add intermediate processing steps"""
+        step_id = f"step_{step_name.lower().replace(' ', '_')}"
+        
+        new_node = {
+            "id": step_id,
+            "type": "integration",  # Reuse integration style
+            "data": {
+                "label": step_name,
+                "status": "pending"
+            },
+            "position": {"x": 500, "y": self._calculate_y_position()}
+        }
+        
+        # Create connections from dependencies
+        new_edges = []
+        if dependencies:
+            for dep in dependencies:
+                new_edges.append({
+                    "id": f"conn_{dep}_{step_id}",
+                    "source": f"integration_{dep}",
+                    "target": step_id,
+                    "type": "smoothstep"
+                })
+        else:
+            # Connect from all current integration nodes
+            integration_nodes = [n for n in self.current_nodes if n["id"].startswith("integration_")]
+            for node in integration_nodes:
+                new_edges.append({
+                    "id": f"conn_{node['id']}_{step_id}",
+                    "source": node["id"],
+                    "target": step_id,
+                    "type": "smoothstep"
+                })
+        
+        # Connect to output
+        new_edges.append({
+            "id": f"conn_{step_id}_output",
+            "source": step_id, 
+            "target": "output",
+            "type": "smoothstep"
+        })
+        
+        self.current_nodes.append(new_node)
+        self.current_edges.extend(new_edges)
+        
+        await self._update_flow(self.current_nodes, self.current_edges)
+    
+    def _calculate_y_position(self) -> int:
+        """Calculate Y position for new nodes to avoid overlap"""
+        integration_nodes = [n for n in self.current_nodes if n["id"].startswith("integration_") or n["id"].startswith("step_")]
+        return 100 + (len(integration_nodes) * 120)
+    
+    async def _update_flow(self, nodes: List[Dict], edges: List[Dict]):
+        """Send complete flow update to frontend"""
+        from websockets.websocket_manager import manager
+        
+        await manager.broadcast_to_agent(self.agent_id, {
+            "type": "agent-flow-update",
+            "agent_id": self.agent_id,
+            "nodes": nodes,
+            "connections": edges,
+            "status": "building"
+        })
+    
+    async def _send_node_status_update(self, node_id: str, status: str, output: Any = None):
+        """Send individual node status update"""
+        from websockets.websocket_manager import manager
+        
+        await manager.broadcast_to_agent(self.agent_id, {
+            "type": "agent-node-status",
+            "agent_id": self.agent_id,
+            "nodeId": node_id,
+            "status": status,
+            "output": output
+        })
+3. AI Integration with Real-time Flow
+python
+# workflows/ai_flow_integration.py
+class AIFlowIntegration:
+    def __init__(self, agent_id: str):
+        self.agent_id = agent_id
+        self.flow_generator = RealTimeFlowGenerator(agent_id)
+        self.nemotron = NemotronAI()
+    
+    async def generate_agent_with_visual_flow(self, prompt: str):
+        """Generate agent with real-time flow visualization"""
+        try:
+            # Step 1: Initialize empty flow
+            await self.flow_generator.generate_initial_flow()
+            await asyncio.sleep(0.5)  # Let frontend render
+            
+            # Step 2: Analyze prompt and detect integrations
+            await self._update_status("Analyzing your agent requirements...")
+            integrations = await self._detect_integrations_from_prompt(prompt)
+            
+            # Add integration nodes one by one with animation effect
+            for i, integration in enumerate(integrations):
+                await self.flow_generator.add_integration_node(integration)
+                await asyncio.sleep(0.3)  # Visual delay for animation effect
+            
+            # Step 3: Generate core logic steps
+            await self._update_status("Designing agent workflow...")
+            processing_steps = await self._generate_processing_steps(prompt, integrations)
+            
+            for step in processing_steps:
+                await self.flow_generator.add_processing_step(step["name"], step["dependencies"])
+                await asyncio.sleep(0.2)
+            
+            # Step 4: Mark flow as complete
+            await self.flow_generator._update_flow(
+                self.flow_generator.current_nodes,
+                self.flow_generator.current_edges
+            )
+            
+            # Step 5: Generate actual code
+            await self._update_status("Generating agent code...")
+            agent_code = await self.nemotron.generate_agent_code(prompt, integrations)
+            
+            return agent_code
+            
+        except Exception as e:
+            await self._update_status(f"Error: {str(e)}", "error")
+            raise
+    
+    async def _detect_integrations_from_prompt(self, prompt: str) -> List[str]:
+        """Detect required integrations from user prompt"""
+        # Use Nemotron to analyze prompt and extract integrations
+        analysis_prompt = f"""
+        Analyze this agent request and extract all required services/integrations:
+        "{prompt}"
+        
+        Return ONLY a JSON array of service names like ["gmail", "slack", "postgresql"]
+        """
+        
+        response = await self.nemotron.generate_response(analysis_prompt)
+        
+        try:
+            # Parse JSON response
+            integrations = json.loads(response)
+            return integrations
+        except:
+            # Fallback: basic keyword detection
+            return self._fallback_integration_detection(prompt)
+    
+    async def _generate_processing_steps(self, prompt: str, integrations: List[str]) -> List[Dict]:
+        """Generate processing steps for the workflow"""
+        steps_prompt = f"""
+        Based on this agent request: "{prompt}"
+        And these integrations: {integrations}
+        
+        Generate 3-5 processing steps for the workflow. Return JSON:
+        [{{"name": "Step Name", "dependencies": ["integration1", "integration2"]}}]
+        """
+        
+        response = await self.nemotron.generate_response(steps_prompt)
+        
+        try:
+            return json.loads(response)
+        except:
+            # Default steps
+            return [
+                {"name": "Data Processing", "dependencies": integrations},
+                {"name": "AI Analysis", "dependencies": []},
+                {"name": "Output Generation", "dependencies": []}
+            ]
+    
+    async def _update_status(self, message: str, level: str = "info"):
+        """Send status updates to frontend"""
+        from websockets.websocket_manager import manager
+        
+        await manager.broadcast_to_agent(self.agent_id, {
+            "type": "ai-generation-progress",
+            "agent_id": self.agent_id,
+            "message": message,
+            "level": level
+        })
+4. Enhanced WebSocket Handler
+python
+# websockets/flow_websocket.py
+from fastapi import WebSocket
+import json
+
+class FlowWebSocketHandler:
+    def __init__(self):
+        self.active_flows = {}  # agent_id -> FlowGenerator
+    
+    async def handle_flow_message(self, agent_id: str, message: dict, websocket: WebSocket):
+        """Handle flow-related WebSocket messages"""
+        message_type = message.get("type")
+        
+        if message_type == "flow-generation-request":
+            await self.handle_flow_generation_request(agent_id, message, websocket)
+        
+        elif message_type == "node-interaction":
+            await self.handle_node_interaction(agent_id, message)
+        
+        elif message_type == "flow-layout-change":
+            await self.handle_flow_layout_change(agent_id, message)
+    
+    async def handle_flow_generation_request(self, agent_id: str, message: dict, websocket: WebSocket):
+        """Handle request to generate new flow"""
+        prompt = message.get("prompt", "")
+        
+        # Initialize flow generator for this agent
+        flow_integration = AIFlowIntegration(agent_id)
+        
+        # Start flow generation in background
+        asyncio.create_task(
+            self._generate_flow_background(flow_integration, prompt, websocket)
+        )
+    
+    async def _generate_flow_background(self, flow_integration: AIFlowIntegration, prompt: str, websocket: WebSocket):
+        """Generate flow in background with real-time updates"""
+        try:
+            agent_code = await flow_integration.generate_agent_with_visual_flow(prompt)
+            
+            # Send completion message
+            await websocket.send_json({
+                "type": "flow-generation-complete",
+                "agent_id": flow_integration.agent_id,
+                "code": agent_code
+            })
+            
+        except Exception as e:
+            await websocket.send_json({
+                "type": "flow-generation-error", 
+                "agent_id": flow_integration.agent_id,
+                "error": str(e)
+            })
+    
+    async def handle_node_interaction(self, agent_id: str, message: dict):
+        """Handle user interactions with nodes"""
+        node_id = message.get("nodeId")
+        action = message.get("action")
+        
+        if agent_id in self.active_flows:
+            flow_generator = self.active_flows[agent_id]
+            
+            if action == "test":
+                await flow_generator.update_node_status(node_id, "running")
+                # Simulate testing
+                await asyncio.sleep(2)
+                await flow_generator.update_node_status(node_id, "success")
+            
+            elif action == "configure":
+                await flow_generator.update_node_status(node_id, "configuring")
+5. Frontend Integration Hook
+typescript
+// hooks/useAgentFlow.ts
+import { useWebSocket } from './useWebSocket';
+
+export const useAgentFlow = (agentId: string) => {
+  const { sendMessage, isConnected } = useWebSocket(agentId);
+  
+  const generateFlow = (prompt: string) => {
+    sendMessage({
+      type: 'flow-generation-request',
+      prompt: prompt
+    });
+  };
+  
+  const testNode = (nodeId: string) => {
+    sendMessage({
+      type: 'node-interaction',
+      nodeId: nodeId,
+      action: 'test'
+    });
+  };
+  
+  const configureNode = (nodeId: string) => {
+    sendMessage({
+      type: 'node-interaction', 
+      nodeId: nodeId,
+      action: 'configure'
+    });
+  };
+  
+  const updateLayout = (nodes: any[], edges: any[]) => {
+    sendMessage({
+      type: 'flow-layout-change',
+      nodes: nodes,
+      edges: edges
+    });
+  };
+  
+  return {
+    generateFlow,
+    testNode,
+    configureNode, 
+    updateLayout,
+    isConnected
+  };
+};
+🎨 Enhanced Visual Features
+Custom Styling for Premium Look
+css
+/* styles/flow.css */
+.react-flow__node {
+  border-radius: 10px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.react-flow__node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.react-flow__edge path {
+  stroke-width: 2;
+  stroke-dasharray: 5;
+  animation: flow 2s linear infinite;
+}
+
+@keyframes flow {
+  0% {
+    stroke-dashoffset: 10;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Status colors */
+.node-status-pending {
+  border-color: #6b7280;
+}
+
+.node-status-running {
+  border-color: #f59e0b;
+  animation: pulse 2s infinite;
+}
+
+.node-status-success {
+  border-color: #10b981;
+}
+
+.node-status-error {
+  border-color: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+🚀 Complete User Experience
+Real-time Flow Building Process:
+text
+1. User types: "Create email agent for Gmail + Slack notifications"
+2. Instantly see: [Input] node appears
+3. AI detects integrations: Gmail, Slack
+4. Watch nodes appear one by one with smooth animations:
+   → [Gmail] node slides in from left
+   → [Slack] node appears below
+   → Connections automatically draw between nodes
+5. Processing steps appear:
+   → [Email Processing] 
+   → [Notification Logic]
+   → [Output Formatting]
+6. All nodes connected in beautiful flow
+7. User can click nodes to test/configure
+8. Real-time status updates during execution
+Features Users See in Real-time:
+✅ Progressive Building: Nodes appear one by one
+
+✅ Smooth Animations: Slide-in effects and connection drawing
+
+✅ Live Status: Colors change based on node state
+
+✅ Interactive Nodes: Click to test/configure
+
+✅ Auto-layout: Smart positioning without overlap
+
+✅ Visual Feedback: Pulses, glows, and hover effects
