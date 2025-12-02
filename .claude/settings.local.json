@@ -4,7 +4,15 @@
       "Bash(aws elbv2 describe-target-health:*)",
       "Bash(aws ecs describe-task-definition:*)",
       "Bash(curl:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(aws cloudformation delete-stack:*)",
+      "Bash(aws cloudformation describe-stacks:*)",
+      "Bash(aws secretsmanager delete-secret:*)",
+      "Bash(aws ecr describe-repositories:*)",
+      "Bash(aws ecr delete-repository:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,5 +1,5 @@
 """
-VibeAgent Forge - Main FastAPI Application
+NodeRush - Main FastAPI Application
 Production-ready backend for AI Agent Builder Platform
 """
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifespan events - startup and shutdown"""
     # Startup
-    logger.info("🚀 Starting VibeAgent Forge Backend...")
+    logger.info("🚀 Starting NodeRush Backend...")
 
     # Initialize database
     db_initialized = False
@@ -57,8 +57,8 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="VibeAgent Forge API",
-    description="AI-powered agent builder platform with real-time execution",
+    title="NodeRush API",
+    description="AI-powered agent builder platform with 3-agent workflow",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -76,10 +76,10 @@ app.add_middleware(
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for AWS ECS/ALB"""
+    """Health check endpoint"""
     return {
         "status": "healthy",
-        "service": "vibeagent-forge-backend",
+        "service": "noderush-backend",
         "version": "1.0.0"
     }
 
@@ -88,7 +88,7 @@ async def health_check():
 async def root():
     """Root endpoint"""
     return {
-        "message": "Welcome to VibeAgent Forge API",
+        "message": "Welcome to NodeRush API",
         "version": "1.0.0",
         "docs": "/docs"
     }
