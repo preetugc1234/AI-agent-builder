@@ -10,8 +10,9 @@ asyncpg
 alembic
 psycopg2-binary
 
-# Redis
-redis
+# Redis (Upstash compatible)
+redis[hiredis]
+hiredis
 
 # Authentication & Security
 python-jose[cryptography]

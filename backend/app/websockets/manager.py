@@ -1,6 +1,7 @@
 """
 WebSocket Connection Manager
 Handles real-time connections for agent operations
+Integrated with Redis (Upstash) for scalability
 """
 
 import asyncio
@@ -18,12 +19,18 @@ class ConnectionManager:
     """Manages WebSocket connections for real-time agent operations"""
 
     def __init__(self):
-        # agent_id -> set of WebSocket connections
+        # Local in-memory connections (for current instance)
         self.active_connections: Dict[str, Set[WebSocket]] = {}
         # connection_id -> agent_id mapping
         self.connection_agents: Dict[str, str] = {}
         # connection_id -> WebSocket mapping
         self.connections: Dict[str, WebSocket] = {}
+        # Redis service will be injected
+        self.redis_service = None
+
+    def set_redis_service(self, redis_service):
+        """Inject Redis service for distributed connection tracking"""
+        self.redis_service = redis_service
 
     async def connect(self, websocket: WebSocket, agent_id: str) -> str:
         """
@@ -44,10 +51,14 @@ class ConnectionManager:
         if agent_id not in self.active_connections:
             self.active_connections[agent_id] = set()
 
-        # Register connection
+        # Register connection locally
         self.active_connections[agent_id].add(websocket)
         self.connection_agents[connection_id] = agent_id
         self.connections[connection_id] = websocket
+
+        # Track in Redis for distributed setup
+        if self.redis_service:
+            await self.redis_service.add_websocket_connection(agent_id, connection_id)
 
         # Send connection established event
         await self.send_personal_message(
@@ -79,6 +90,10 @@ class ConnectionManager:
             # Remove empty agent entries
             if not self.active_connections[agent_id]:
                 del self.active_connections[agent_id]
+
+            # Remove from Redis
+            if self.redis_service:
+                await self.redis_service.remove_websocket_connection(agent_id, connection_id)
 
         # Cleanup mappings
         if connection_id in self.connection_agents:

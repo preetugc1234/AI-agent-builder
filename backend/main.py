@@ -14,6 +14,8 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.db.database import init_database, engine, Base
 from app.api import agents, auth
+from app.services.redis_service import redis_service
+from app.websockets.manager import manager
 
 # Configure logging
 logging.basicConfig(
@@ -29,7 +31,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting NodeRush Backend...")
 
-    # Initialize database
+    # Initialize Redis (Upstash)
+    redis_connected = await redis_service.connect()
+    if redis_connected:
+        # Inject Redis into WebSocket manager
+        manager.set_redis_service(redis_service)
+        logger.info("✅ Redis connected and integrated with WebSocket manager")
+    else:
+        logger.warning("⚠️ Redis connection failed - running without Redis")
+
+    # Initialize database (Supabase PostgreSQL)
     db_initialized = False
     for attempt in range(3):
         try:
@@ -52,6 +63,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    logger.info("🛑 Shutting down...")
+    await redis_service.disconnect()
     logger.info("✅ Shutdown complete")
 
 

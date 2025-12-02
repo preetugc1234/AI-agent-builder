@@ -1,5 +1,6 @@
 """
 Agent Execution Workflow with real-time monitoring
+Integrated with Redis (Upstash) for status tracking
 """
 
 import logging
@@ -7,6 +8,7 @@ import asyncio
 from typing import Dict, Any
 from datetime import datetime
 from app.websockets.manager import manager
+from app.services.redis_service import redis_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,13 @@ class AgentExecutionWorkflow:
         self.is_running = True
 
         try:
+            # Set agent status in Redis
+            await redis_service.set_agent_status(
+                self.agent_id,
+                "running",
+                {"start_time": datetime.utcnow().isoformat()}
+            )
+
             # Step 1: Start execution
             await self._send_update("agent-execution-start", {
                 "agent_id": self.agent_id,
@@ -78,6 +87,16 @@ class AgentExecutionWorkflow:
                 "duration": 5  # Calculate actual duration
             })
 
+            # Update Redis status
+            await redis_service.set_agent_status(
+                self.agent_id,
+                "completed",
+                {
+                    "end_time": datetime.utcnow().isoformat(),
+                    "result": result
+                }
+            )
+
             return result
 
         except Exception as e:
@@ -87,6 +106,13 @@ class AgentExecutionWorkflow:
                 "agent_id": self.agent_id,
                 "error": str(e)
             })
+
+            # Update Redis status
+            await redis_service.set_agent_status(
+                self.agent_id,
+                "error",
+                {"error": str(e)}
+            )
 
             raise
 
