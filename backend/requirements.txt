@@ -19,9 +19,6 @@ passlib[bcrypt]
 python-dotenv
 cryptography
 
-# AWS SDK
-boto3
-
 # HTTP Client for NVIDIA Nemotron API
 httpx
 aiohttp

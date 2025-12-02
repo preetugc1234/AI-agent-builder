@@ -33,3 +33,13 @@ stack-events*.json
 temp_*.txt
 temp_*.json
 temp-task-def.json
+
+# AWS (not used anymore)
+*.pem
+aws/
+.aws/
+
+# Deployment scripts (not needed)
+*.bat
+deploy*.sh
+setup*.sh

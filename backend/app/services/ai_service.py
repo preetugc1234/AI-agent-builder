@@ -79,8 +79,6 @@ Available integrations:
 - razorpay (payments)
 - stripe (payments)
 - sentry (error tracking)
-- aws (cloud services)
-- cloudflare (CDN/edge)
 
 Analyze the user's request and return ONLY a JSON array of required integration names.
 Example: ["gmail", "slack", "supabase"]"""

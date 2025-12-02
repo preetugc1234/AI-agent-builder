@@ -181,18 +181,6 @@ async def get_available_integrations():
                 "display_name": "Vercel",
                 "category": "deployment",
                 "auth_type": "oauth"
-            },
-            {
-                "name": "aws",
-                "display_name": "AWS",
-                "category": "cloud",
-                "auth_type": "api_key"
-            },
-            {
-                "name": "cloudflare",
-                "display_name": "Cloudflare",
-                "category": "cloud",
-                "auth_type": "api_key"
             }
         ]
     }
