@@ -43,3 +43,34 @@ aws/
 *.bat
 deploy*.sh
 setup*.sh
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+.env
+.venv
+
+# Database
+*.db
+*.sqlite
+*.sqlite3

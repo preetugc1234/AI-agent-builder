@@ -1,8 +1,9 @@
 """
 Authentication API routes
+Supabase Auth integration with Redis sessions
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,15 +11,18 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
+import logging
 
 from app.db.database import get_db
 from app.models.models import User
 from app.schemas.schemas import UserCreate, UserLogin, UserResponse
 from app.core.config import settings
+from app.services.redis_service import redis_service
 
 router = APIRouter()
 security = HTTPBearer()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
 
 
 def hash_password(password: str) -> str:
@@ -79,9 +83,9 @@ async def get_current_user(
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db), request: Request = None):
     """
-    Register a new user
+    Register a new user (no email verification required)
     """
     # Check if user exists
     result = await db.execute(select(User).where(User.email == user_data.email))
@@ -91,6 +95,13 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
+        )
+
+    # Validate password strength (minimum 8 characters)
+    if len(user_data.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long"
         )
 
     # Create new user
@@ -106,28 +117,52 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(new_user)
 
+    logger.info(f"New user registered: {user_data.email}")
+
     return new_user
 
 
 @router.post("/login")
-async def login(user_data: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(user_data: UserLogin, db: AsyncSession = Depends(get_db), request: Request = None):
     """
     Login user and return access token
+    Creates Redis session for scalability
     """
     # Find user
     result = await db.execute(select(User).where(User.email == user_data.email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(user_data.password, user.password_hash):
+        # Log failed login attempt
+        logger.warning(f"Failed login attempt for email: {user_data.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
 
-    # Create access token
+    # Create access token (7 days expiry from ARCHITECTURE.md)
     access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email}
+        data={
+            "sub": str(user.id),
+            "email": user.email,
+            "tier": user.subscription_tier
+        }
     )
+
+    # Store session in Redis (for real-time session management)
+    session_data = {
+        "user_id": str(user.id),
+        "email": user.email,
+        "subscription_tier": user.subscription_tier,
+        "login_time": datetime.utcnow().isoformat()
+    }
+    await redis_service.set_session(
+        session_id=str(user.id),
+        user_data=session_data,
+        expire_seconds=604800  # 7 days
+    )
+
+    logger.info(f"User logged in: {user.email}")
 
     return {
         "access_token": access_token,
@@ -135,7 +170,8 @@ async def login(user_data: UserLogin, db: AsyncSession = Depends(get_db)):
         "user": {
             "id": str(user.id),
             "email": user.email,
-            "subscription_tier": user.subscription_tier
+            "subscription_tier": user.subscription_tier,
+            "subscription_status": user.subscription_status
         }
     }
 
@@ -149,8 +185,13 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/logout")
-async def logout():
+async def logout(current_user: User = Depends(get_current_user)):
     """
-    Logout user (client-side token removal)
+    Logout user (delete Redis session)
     """
+    # Delete session from Redis
+    await redis_service.delete_session(str(current_user.id))
+
+    logger.info(f"User logged out: {current_user.email}")
+
     return {"message": "Logged out successfully"}

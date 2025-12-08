@@ -21,14 +21,16 @@ def init_database():
     global engine, AsyncSessionLocal
 
     try:
-        # Create async engine
+        # Create async engine with connection pooling
+        # Pool settings optimized for Supabase free tier (500 MB, max 10 connections)
         engine = create_async_engine(
             settings.DATABASE_URL,
             echo=settings.DEBUG,
             future=True,
-            pool_pre_ping=True,
-            pool_size=10,
-            max_overflow=20
+            pool_pre_ping=True,        # Verify connection health before using
+            pool_size=10,               # 10 persistent connections
+            max_overflow=20,            # 20 additional connections on demand
+            pool_recycle=3600           # Recycle connections after 1 hour (Supabase best practice)
         )
 
         # Create async session factory
