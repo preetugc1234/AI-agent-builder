@@ -4,7 +4,6 @@ Production-ready backend for AI Agent Builder Platform
 """
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 import logging
@@ -12,6 +11,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
+from app.core.middleware import setup_cors_middleware, setup_security_middleware
 from app.db.database import init_database, engine, Base
 from app.api import agents, auth, analytics
 from app.services.redis_service import redis_service
@@ -73,17 +73,16 @@ app = FastAPI(
     title="NodeRush API",
     description="AI-powered agent builder platform with 3-agent workflow",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# CORS Configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Setup CORS middleware (must be added before other middleware)
+setup_cors_middleware(app, settings.CORS_ORIGINS)
+
+# Setup security middleware (logging, headers, etc.)
+setup_security_middleware(app)
 
 
 # Health check endpoint

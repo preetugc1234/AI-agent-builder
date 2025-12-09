@@ -18,19 +18,30 @@ class Settings(BaseSettings):
     API_VERSION: str = "v1"
 
     # CORS - accepts comma-separated string or list
+    # Add your production frontend URL here or set via environment variable
     CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
         "https://noderush.vercel.app",
+        # Add your Vercel deployment URL when deployed
+        # "https://your-app.vercel.app",
     ]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
-        """Parse CORS_ORIGINS from comma-separated string or list"""
+        """
+        Parse CORS_ORIGINS from comma-separated string or list
+
+        Environment variable format:
+        CORS_ORIGINS="http://localhost:3000,https://myapp.vercel.app"
+        """
         if isinstance(v, str):
             # Split by comma and strip whitespace
-            return [origin.strip() for origin in v.split(",")]
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
     # Database - Supabase PostgreSQL
