@@ -10,13 +10,14 @@ from sqlalchemy import select
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 import logging
 
 from app.db.database import get_db
 from app.models.models import User
 from app.schemas.schemas import UserCreate, UserLogin, UserResponse
 from app.core.config import settings
+from app.core.auth_middleware import AuthMiddleware, get_tier_permissions
 from app.services.redis_service import redis_service
 
 router = APIRouter()
@@ -35,51 +36,104 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create JWT access token"""
-    to_encode = data.copy()
+def create_access_token(
+    user_id: str,
+    email: str,
+    tier: str,
+    permissions: Optional[List[str]] = None,
+    expires_delta: Optional[timedelta] = None
+) -> str:
+    """
+    Create JWT access token with permissions
+
+    Args:
+        user_id: User UUID
+        email: User email
+        tier: Subscription tier (free, pro, enterprise)
+        permissions: Custom permissions (defaults to tier permissions)
+        expires_delta: Token expiration time
+
+    Returns:
+        Encoded JWT token
+    """
+    if permissions is None:
+        permissions = get_tier_permissions(tier)
+
+    # Token payload matching ARCHITECTURE.md spec
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "tier": tier,
+        "permissions": permissions,
+        "iat": datetime.utcnow(),
+    }
 
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    payload.update({"exp": expire})
+
+    encoded_jwt = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
     return encoded_jwt
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request = None,
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    """Get current authenticated user"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
+    """
+    Get current authenticated user
+    Validates JWT token and verifies session in Redis
+    Auto-refreshes session TTL on activity
+    """
     try:
         token = credentials.credentials
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+        # Decode and validate token
+        payload = await AuthMiddleware.decode_token(token)
         user_id: str = payload.get("sub")
 
-        if user_id is None:
-            raise credentials_exception
+        # Verify session in Redis (auto-refreshes TTL)
+        session_data = await AuthMiddleware.verify_session(user_id)
 
-    except JWTError:
-        raise credentials_exception
+        if not session_data:
+            logger.warning(f"Session not found for user {user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired. Please login again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-    # Get user from database
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+        # Get user from database
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
 
-    if user is None:
-        raise credentials_exception
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-    return user
+        # Store token payload in request state for permission checks
+        if request:
+            request.state.user_payload = payload
+
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Authentication error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -140,13 +194,11 @@ async def login(user_data: UserLogin, db: AsyncSession = Depends(get_db), reques
             detail="Incorrect email or password"
         )
 
-    # Create access token (7 days expiry from ARCHITECTURE.md)
+    # Create access token with permissions (7 days expiry from ARCHITECTURE.md)
     access_token = create_access_token(
-        data={
-            "sub": str(user.id),
-            "email": user.email,
-            "tier": user.subscription_tier
-        }
+        user_id=str(user.id),
+        email=user.email,
+        tier=user.subscription_tier
     )
 
     # Store session in Redis (for real-time session management)

@@ -1,8 +1,8 @@
 """
-Agents API routes
+Agents API routes with permission-based access control
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
@@ -14,6 +14,7 @@ from app.db.database import get_db
 from app.models.models import User, Agent
 from app.schemas.schemas import AgentCreate, AgentUpdate, AgentResponse
 from app.api.auth import get_current_user
+from app.core.auth_middleware import require_permissions, require_tier
 from app.services.three_agent_service import three_agent_service
 
 logger = logging.getLogger(__name__)
@@ -28,13 +29,16 @@ router = APIRouter()
 
 
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
+# @require_permissions("write:agents")  # Uncomment to enable permission check
 async def create_agent(
     agent_data: AgentCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Create a new agent
+    Requires: write:agents permission
     """
     # Create agent
     new_agent = Agent(
@@ -131,13 +135,16 @@ async def update_agent(
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+# @require_permissions("delete:agents")  # Only pro/enterprise tiers have this
 async def delete_agent(
     agent_id: UUID,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Delete an agent
+    Requires: delete:agents permission (pro tier or higher)
     """
     result = await db.execute(
         select(Agent).where(Agent.id == agent_id, Agent.user_id == current_user.id)
