@@ -3,7 +3,8 @@ Configuration settings for NodeRush
 """
 
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import field_validator
+from typing import List, Union
 import os
 from functools import lru_cache
 
@@ -16,12 +17,21 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     API_VERSION: str = "v1"
 
-    # CORS
-    CORS_ORIGINS: List[str] = [
+    # CORS - accepts comma-separated string or list
+    CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://localhost:5173",
         "https://noderush.vercel.app",
     ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS_ORIGINS from comma-separated string or list"""
+        if isinstance(v, str):
+            # Split by comma and strip whitespace
+            return [origin.strip() for origin in v.split(",")]
+        return v
 
     # Database - Supabase PostgreSQL
     DATABASE_URL: str = os.getenv(
