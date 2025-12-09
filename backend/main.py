@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.middleware import setup_cors_middleware, setup_security_middleware
-from app.db.database import init_database, engine, Base
+from app.db import database as db  # Import module, not variables
 from app.api import agents, auth, analytics
 from app.services.redis_service import redis_service
 from app.websockets.manager import manager
@@ -44,13 +44,18 @@ async def lifespan(app: FastAPI):
     db_initialized = False
     for attempt in range(3):
         try:
-            if init_database():
-                # Create tables
-                async with engine.begin() as conn:
-                    await conn.run_sync(Base.metadata.create_all)
-                logger.info("✅ Database tables created")
-                db_initialized = True
-                break
+            if db.init_database():
+                # Create tables (use db.engine which is updated by init_database)
+                if db.engine:
+                    async with db.engine.begin() as conn:
+                        await conn.run_sync(db.Base.metadata.create_all)
+                    logger.info("✅ Database tables created")
+                    db_initialized = True
+                    break
+                else:
+                    logger.warning(f"Database init attempt {attempt + 1} failed: engine is None")
+            else:
+                logger.warning(f"Database init attempt {attempt + 1} failed: init_database returned False")
         except Exception as e:
             logger.warning(f"Database init attempt {attempt + 1} failed: {e}")
             await asyncio.sleep(2)
@@ -104,14 +109,13 @@ async def health_check():
     """
     from datetime import datetime
     from sqlalchemy import text
-    from app.db.database import engine
 
     checks = {}
 
     # Check Database (Supabase PostgreSQL)
     try:
-        if engine:
-            async with engine.connect() as conn:
+        if db.engine:
+            async with db.engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
             checks["database"] = {
                 "status": "healthy",

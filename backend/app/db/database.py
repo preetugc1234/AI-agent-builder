@@ -21,6 +21,11 @@ def init_database():
     global engine, AsyncSessionLocal
 
     try:
+        # Log the DATABASE_URL (without password for security)
+        url_parts = settings.DATABASE_URL.split('@')
+        safe_url = f"{url_parts[0].split(':')[0]}:***@{url_parts[1]}" if len(url_parts) > 1 else "***"
+        logger.info(f"Initializing database connection to: {safe_url}")
+
         # Create async engine with connection pooling
         # Pool settings optimized for Supabase free tier (500 MB, max 10 connections)
         engine = create_async_engine(
@@ -28,9 +33,14 @@ def init_database():
             echo=settings.DEBUG,
             future=True,
             pool_pre_ping=True,        # Verify connection health before using
-            pool_size=10,               # 10 persistent connections
-            max_overflow=20,            # 20 additional connections on demand
-            pool_recycle=3600           # Recycle connections after 1 hour (Supabase best practice)
+            pool_size=5,                # Reduced to 5 for free tier
+            max_overflow=10,            # 10 additional connections on demand
+            pool_recycle=3600,          # Recycle connections after 1 hour (Supabase best practice)
+            connect_args={
+                "server_settings": {
+                    "application_name": "noderush_backend"
+                }
+            }
         )
 
         # Create async session factory
@@ -41,10 +51,12 @@ def init_database():
             autocommit=False,
             autoflush=False
         )
-        logger.info("Database initialized successfully")
+        logger.info("✅ Database engine initialized successfully")
         return True
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"❌ Failed to initialize database: {e}")
+        engine = None
+        AsyncSessionLocal = None
         return False
 
 
