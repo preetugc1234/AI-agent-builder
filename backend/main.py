@@ -6,23 +6,26 @@ Production-ready backend for AI Agent Builder Platform
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 import uvicorn
-import logging
 import asyncio
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.middleware import setup_cors_middleware, setup_security_middleware
+from app.core.logging_config import setup_logging, get_logger
+from app.core.error_handlers import register_error_handlers
 from app.db import database as db  # Import module, not variables
 from app.api import agents, auth, analytics
 from app.services.redis_service import redis_service
 from app.websockets.manager import manager
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Setup structured logging
+setup_logging(
+    level="DEBUG" if settings.DEBUG else "INFO",
+    json_logs=not settings.DEBUG,  # Use JSON logs in production
+    colored_console=settings.DEBUG  # Use colors in development
 )
-logger = logging.getLogger(__name__)
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -88,6 +91,9 @@ setup_cors_middleware(app, settings.CORS_ORIGINS)
 
 # Setup security middleware (logging, headers, etc.)
 setup_security_middleware(app)
+
+# Register error handlers
+register_error_handlers(app)
 
 
 # Health check endpoint
@@ -184,19 +190,6 @@ async def root():
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
-
-
-# Error handlers
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Global error: {str(exc)}")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal server error",
-            "message": str(exc) if settings.DEBUG else "An error occurred"
-        }
-    )
 
 
 if __name__ == "__main__":

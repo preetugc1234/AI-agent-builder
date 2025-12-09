@@ -9,11 +9,12 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 import time
-import logging
 import uuid
 from typing import Callable
 
-logger = logging.getLogger(__name__)
+from app.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -59,11 +60,23 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 
+        # Get client info
+        client_ip = request.client.host if request.client else "unknown"
+
+        # Create request logger with context
+        request_logger = logger.bind(
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            ip_address=client_ip
+        )
+
         # Log request
         start_time = time.time()
-        logger.info(
-            f"[{request_id}] {request.method} {request.url.path} "
-            f"- Client: {request.client.host if request.client else 'unknown'}"
+        request_logger.info(
+            f"Request started: {request.method} {request.url.path}",
+            user_agent=request.headers.get("user-agent"),
+            referer=request.headers.get("referer")
         )
 
         try:
@@ -73,9 +86,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
 
             # Log response
-            logger.info(
-                f"[{request_id}] {request.method} {request.url.path} "
-                f"- Status: {response.status_code} - Duration: {duration:.3f}s"
+            request_logger.info(
+                f"Request completed: {request.method} {request.url.path}",
+                status_code=response.status_code,
+                duration=round(duration, 3)
             )
 
             # Add request ID to response headers
@@ -85,9 +99,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(
-                f"[{request_id}] {request.method} {request.url.path} "
-                f"- Error: {str(e)} - Duration: {duration:.3f}s"
+            request_logger.error(
+                f"Request failed: {request.method} {request.url.path}",
+                error=str(e),
+                error_type=type(e).__name__,
+                duration=round(duration, 3)
             )
             raise
 
