@@ -50,6 +50,36 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://postgres:postgres@localhost:5432/noderush"
     )
 
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def clean_database_url(cls, v):
+        """
+        Clean DATABASE_URL by removing unsupported parameters for asyncpg
+
+        Supabase connection strings often include '?pgbouncer=true' which is not
+        supported by asyncpg driver. This validator removes such parameters.
+        """
+        if v and "?" in v:
+            # Split URL and query parameters
+            base_url, query_string = v.split("?", 1)
+
+            # Parse query parameters
+            params = query_string.split("&")
+
+            # Filter out unsupported parameters (pgbouncer)
+            supported_params = [
+                param for param in params
+                if not param.startswith("pgbouncer=")
+            ]
+
+            # Reconstruct URL with supported parameters only
+            if supported_params:
+                return f"{base_url}?{'&'.join(supported_params)}"
+            else:
+                return base_url
+
+        return v
+
     # Redis - Upstash Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
