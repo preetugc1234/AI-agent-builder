@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.db.database import init_database, engine, Base
-from app.api import agents, auth
+from app.api import agents, auth, analytics
 from app.services.redis_service import redis_service
 from app.websockets.manager import manager
 
@@ -110,6 +110,7 @@ async def root():
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 
 
 # Error handlers
