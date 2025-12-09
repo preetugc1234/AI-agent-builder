@@ -27,6 +27,7 @@ aiohttp
 # Utilities
 pydantic
 pydantic-settings
+email-validator
 python-json-logger
 tenacity
 python-dateutil
