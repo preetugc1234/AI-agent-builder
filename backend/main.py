@@ -88,11 +88,81 @@ setup_security_middleware(app)
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """
+    Comprehensive health check endpoint
+
+    Checks connectivity to all services:
+    - Database (Supabase PostgreSQL)
+    - Redis (Upstash)
+    - Application status
+
+    Returns:
+        - status: "healthy", "degraded", or "unhealthy"
+        - checks: Individual service health status
+        - timestamp: UTC timestamp of health check
+        - version: API version
+    """
+    from datetime import datetime
+    from sqlalchemy import text
+    from app.db.database import engine
+
+    checks = {}
+
+    # Check Database (Supabase PostgreSQL)
+    try:
+        if engine:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            checks["database"] = {
+                "status": "healthy",
+                "message": "Connected to Supabase PostgreSQL"
+            }
+        else:
+            checks["database"] = {
+                "status": "unhealthy",
+                "message": "Database engine not initialized"
+            }
+    except Exception as e:
+        checks["database"] = {
+            "status": "unhealthy",
+            "message": f"Database connection failed: {str(e)}"
+        }
+
+    # Check Redis (Upstash)
+    try:
+        if redis_service.redis_client:
+            await redis_service.redis_client.ping()
+            checks["redis"] = {
+                "status": "healthy",
+                "message": "Connected to Upstash Redis"
+            }
+        else:
+            checks["redis"] = {
+                "status": "unhealthy",
+                "message": "Redis client not initialized"
+            }
+    except Exception as e:
+        checks["redis"] = {
+            "status": "unhealthy",
+            "message": f"Redis connection failed: {str(e)}"
+        }
+
+    # Determine overall status
+    statuses = [check["status"] for check in checks.values()]
+
+    if all(status == "healthy" for status in statuses):
+        overall_status = "healthy"
+    elif any(status == "healthy" for status in statuses):
+        overall_status = "degraded"
+    else:
+        overall_status = "unhealthy"
+
     return {
-        "status": "healthy",
+        "status": overall_status,
         "service": "noderush-backend",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "checks": checks,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
 
