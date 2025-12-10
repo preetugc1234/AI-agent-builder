@@ -40,7 +40,8 @@
       "Bash(aws cloudwatch describe-alarms:*)",
       "Bash(for rev in {1..30})",
       "Bash(do aws ecs deregister-task-definition --task-definition vibeagent-backend:$rev --region us-east-1)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(python -c:*)"
     ],
     "deny": [],
     "ask": []
