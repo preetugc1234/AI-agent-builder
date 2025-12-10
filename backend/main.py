@@ -14,7 +14,7 @@ from app.core.middleware import setup_cors_middleware, setup_security_middleware
 from app.core.logging_config import setup_logging, get_logger
 from app.core.error_handlers import register_error_handlers
 from app.db import database as db  # Import module, not variables
-from app.api import agents, auth, analytics
+from app.api import agents, auth, analytics, users
 from app.services.redis_service import redis_service
 from app.websockets.manager import manager
 
@@ -189,6 +189,7 @@ async def root():
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 
 
