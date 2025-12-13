@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from passlib.context import CryptContext
+import bcrypt
+import hashlib
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -29,26 +30,27 @@ from app.services.audit_service import audit_service
 
 router = APIRouter()
 security = HTTPBearer()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logger = get_logger(__name__)
 
 
 def hash_password(password: str) -> str:
     """
-    Hash password with bcrypt
+    Hash password with bcrypt (using bcrypt library directly)
 
     Note: bcrypt has a 72-byte limit. For passwords >72 bytes,
     we hash them with SHA256 first to create a fixed-size input.
     """
-    import hashlib
-
     # Check if password exceeds bcrypt's 72-byte limit
     password_bytes = password.encode('utf-8')
     if len(password_bytes) > 72:
         # Hash long passwords with SHA256 first (creates 64-byte hex string)
         password = hashlib.sha256(password_bytes).hexdigest()
+        password_bytes = password.encode('utf-8')
 
-    return pwd_context.hash(password)
+    # Generate salt and hash password using bcrypt directly
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -58,15 +60,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Note: Applies same SHA256 hashing as hash_password()
     for passwords >72 bytes to ensure verification works.
     """
-    import hashlib
-
     # Apply same transformation as hash_password()
     password_bytes = plain_password.encode('utf-8')
     if len(password_bytes) > 72:
         # Hash long passwords with SHA256 first (same as hash_password)
         plain_password = hashlib.sha256(password_bytes).hexdigest()
+        password_bytes = plain_password.encode('utf-8')
 
-    return pwd_context.verify(plain_password, hashed_password)
+    # Verify using bcrypt directly
+    try:
+        return bcrypt.checkpw(password_bytes, hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 
 def create_access_token(
