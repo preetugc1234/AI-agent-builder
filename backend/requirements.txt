@@ -24,6 +24,9 @@ cryptography
 httpx
 aiohttp
 
+# AI Token Counting
+tiktoken
+
 # Utilities
 pydantic
 pydantic-settings
