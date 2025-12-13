@@ -1,355 +1,386 @@
 """
-AI Service using NVIDIA Nemotron via OpenRouter
+AI Service - OpenRouter Integration with NVIDIA Nemotron
+Handles API calls to NVIDIA Nemotron via OpenRouter
+Includes reasoning support and token management
 """
 
 import logging
-from typing import List, Dict, Any
-import httpx
+from typing import List, Dict, Optional, Any
+from openai import OpenAI
+
 from app.core.config import settings
+from app.services.token_manager import token_manager
+from app.services.token_counter_service import token_counter
+from app.core.exceptions import AIGenerationError, QuotaExceededError
 
 logger = logging.getLogger(__name__)
 
 
-class NemotronAIService:
-    """NVIDIA Nemotron AI service for agent code generation"""
+class AIService:
+    """
+    Service for calling NVIDIA Nemotron via OpenRouter
+
+    Features:
+    - OpenRouter API integration
+    - NVIDIA Nemotron model support
+    - Reasoning mode enabled
+    - Token tracking and limits
+    - Error handling and retries
+    """
+
+    # Model configuration
+    MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
+    BASE_URL = "https://openrouter.ai/api/v1"
 
     def __init__(self):
-        self.api_key = settings.OPENROUTER_API_KEY
-        self.base_url = settings.OPENROUTER_BASE_URL
-        self.model = settings.AI_MODEL
-        self.client = httpx.AsyncClient(timeout=120.0)
+        """Initialize AI service with OpenRouter client"""
+        try:
+            self.client = OpenAI(
+                base_url=self.BASE_URL,
+                api_key=settings.OPENROUTER_API_KEY
+            )
+            logger.info(f"✅ AI Service initialized with model: {self.MODEL}")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize AI Service: {e}")
+            self.client = None
 
-    async def generate_agent_code(
+    async def generate(
         self,
-        vibe_prompt: str,
-        integrations: List[str],
-        user_id: str
+        messages: List[Dict[str, str]],
+        user_id: str,
+        agent_id: Optional[str] = None,
+        agent_name: str = "unknown",
+        max_tokens: Optional[int] = None,
+        enable_reasoning: bool = True,
+        temperature: float = 0.7
     ) -> Dict[str, Any]:
         """
-        Generate agent code from vibe prompt
+        Generate AI response using NVIDIA Nemotron
 
         Args:
-            vibe_prompt: User's natural language description
-            integrations: List of required integrations
-            user_id: User ID for personalization
+            messages: List of chat messages [{"role": "user", "content": "..."}]
+            user_id: User UUID for tracking
+            agent_id: Agent UUID for tracking (optional)
+            agent_name: "architect", "coder", or "reviewer"
+            max_tokens: Max completion tokens (defaults to agent limit)
+            enable_reasoning: Enable reasoning mode
+            temperature: Sampling temperature (0-1)
 
         Returns:
-            Dictionary containing generated code and metadata
-        """
-        try:
-            system_prompt = self._build_system_prompt()
-            user_message = self._build_user_message(vibe_prompt, integrations)
-
-            response = await self._call_nemotron(system_prompt, user_message)
-
-            # Parse and structure the response
-            return self._parse_ai_response(response, integrations)
-
-        except Exception as e:
-            logger.error(f"Error generating agent code: {str(e)}")
-            raise
-
-    async def detect_integrations(self, vibe_prompt: str) -> List[str]:
-        """
-        Detect required integrations from vibe prompt
-
-        Args:
-            vibe_prompt: User's natural language description
-
-        Returns:
-            List of detected integration names
-        """
-        try:
-            system_prompt = """You are an expert at analyzing requirements and identifying which services/integrations are needed.
-
-Available integrations:
-- gmail (email automation)
-- slack (team communication)
-- twilio (SMS/calls)
-- supabase (database)
-- google_sheets (spreadsheets)
-- airtable (database)
-- notion (knowledge base)
-- openai (AI)
-- langchain (AI orchestration)
-- render (deployment)
-- vercel (frontend deployment)
-- docker (containers)
-- github (code repository)
-- razorpay (payments)
-- stripe (payments)
-- sentry (error tracking)
-
-Analyze the user's request and return ONLY a JSON array of required integration names.
-Example: ["gmail", "slack", "supabase"]"""
-
-            user_message = f"What integrations are needed for this agent?\n\n{vibe_prompt}"
-
-            response = await self._call_nemotron(system_prompt, user_message)
-
-            # Extract integration list from response
-            return self._parse_integrations_response(response)
-
-        except Exception as e:
-            logger.error(f"Error detecting integrations: {str(e)}")
-            return []
-
-    async def generate_flow_data(
-        self,
-        vibe_prompt: str,
-        integrations: List[str]
-    ) -> Dict[str, Any]:
-        """
-        Generate flow diagram data for visualization
-
-        Args:
-            vibe_prompt: User's description
-            integrations: List of integrations
-
-        Returns:
-            Flow data with nodes and connections
-        """
-        nodes = []
-        edges = []
-
-        # Input node
-        nodes.append({
-            "id": "input",
-            "type": "input",
-            "data": {"label": "User Input"},
-            "position": {"x": 100, "y": 200}
-        })
-
-        # Integration nodes
-        y_offset = 100
-        for i, integration in enumerate(integrations):
-            node_id = f"integration_{integration}"
-            nodes.append({
-                "id": node_id,
-                "type": "integration",
-                "data": {
-                    "label": integration.replace("_", " ").title(),
-                    "integration": integration,
-                    "status": "pending"
-                },
-                "position": {"x": 400, "y": y_offset + (i * 120)}
-            })
-
-            # Connection from input
-            edges.append({
-                "id": f"edge_input_{integration}",
-                "source": "input",
-                "target": node_id,
-                "type": "smoothstep"
-            })
-
-        # Output node
-        nodes.append({
-            "id": "output",
-            "type": "output",
-            "data": {"label": "Agent Output"},
-            "position": {"x": 700, "y": 200}
-        })
-
-        # Connect integrations to output
-        for integration in integrations:
-            node_id = f"integration_{integration}"
-            edges.append({
-                "id": f"edge_{integration}_output",
-                "source": node_id,
-                "target": "output",
-                "type": "smoothstep"
-            })
-
-        return {"nodes": nodes, "edges": edges}
-
-    def _build_system_prompt(self) -> str:
-        """Build system prompt for code generation"""
-        return """You are an expert AI agent developer specializing in creating production-ready Python agents.
-
-Your task is to generate complete, working Python code based on the user's requirements.
-
-Requirements:
-1. Generate clean, well-documented Python code
-2. Use async/await for I/O operations
-3. Include proper error handling
-4. Add type hints
-5. Follow PEP 8 style guidelines
-6. Include comments explaining complex logic
-7. Make code modular and maintainable
-
-Return ONLY valid Python code without markdown formatting or explanations."""
-
-    def _build_user_message(self, vibe_prompt: str, integrations: List[str]) -> str:
-        """Build user message with context"""
-        integrations_str = ", ".join(integrations) if integrations else "none"
-
-        return f"""Create a Python agent with the following requirements:
-
-User Request: {vibe_prompt}
-
-Required Integrations: {integrations_str}
-
-Generate a complete Python script (main.py) that:
-1. Implements the user's requirements
-2. Uses the specified integrations
-3. Has proper error handling and logging
-4. Is production-ready
-
-Return ONLY the Python code."""
-
-    async def _call_nemotron(self, system_prompt: str, user_message: str) -> str:
-        """
-        Call NVIDIA Nemotron via OpenRouter
-
-        Args:
-            system_prompt: System instructions
-            user_message: User's message
-
-        Returns:
-            AI response text
-        """
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://vibeagent-forge.com",
-                "X-Title": "VibeAgent Forge"
+            {
+                "content": str,
+                "reasoning_details": dict (if enabled),
+                "usage": {"prompt_tokens": int, "completion_tokens": int, "total_tokens": int},
+                "model": str
             }
 
-            payload = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 4000
-            }
+        Raises:
+            AIGenerationError: If generation fails
+            QuotaExceededError: If quota exceeded
+        """
+        try:
+            if not self.client:
+                raise AIGenerationError(
+                    "AI Service not initialized",
+                    details={"reason": "OpenRouter client is None"}
+                )
 
-            response = await self.client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload
+            # 1. Set max_tokens from agent limit if not specified
+            if max_tokens is None:
+                max_tokens = token_manager.get_agent_limit(agent_name)
+                if max_tokens == 0:
+                    max_tokens = 2000  # Fallback
+
+            # 2. Count input tokens
+            input_tokens = token_counter.count_messages_tokens(messages)
+
+            # 3. Check daily quota before API call
+            quota_check = await token_manager.check_daily_limit(
+                user_id=user_id,
+                required_tokens=input_tokens + max_tokens,
+                tier="free"  # TODO: Get tier from user object
             )
 
-            response.raise_for_status()
-            data = response.json()
+            logger.info(
+                f"Generating with {agent_name}: input={input_tokens}, "
+                f"max_output={max_tokens}, quota={quota_check['remaining']}/{quota_check['limit']}"
+            )
 
-            return data["choices"][0]["message"]["content"]
+            # 4. Call OpenRouter API
+            extra_body = {}
+            if enable_reasoning:
+                extra_body["reasoning"] = {"enabled": True}
 
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error calling Nemotron: {str(e)}")
+            response = self.client.chat.completions.create(
+                model=self.MODEL,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                extra_body=extra_body
+            )
+
+            # 5. Extract response
+            assistant_message = response.choices[0].message
+            content = assistant_message.content
+
+            # Extract reasoning details if available
+            reasoning_details = None
+            if hasattr(assistant_message, 'reasoning_details'):
+                reasoning_details = assistant_message.reasoning_details
+
+            # 6. Get token usage from API response
+            usage = response.usage
+            prompt_tokens = usage.prompt_tokens if hasattr(usage, 'prompt_tokens') else input_tokens
+            completion_tokens = usage.completion_tokens if hasattr(usage, 'completion_tokens') else 0
+            total_tokens = usage.total_tokens if hasattr(usage, 'total_tokens') else (prompt_tokens + completion_tokens)
+
+            # Fallback: count manually if API doesn't provide
+            if completion_tokens == 0:
+                completion_tokens = token_counter.count_tokens(content)
+                total_tokens = prompt_tokens + completion_tokens
+
+            # 7. Track usage
+            await token_manager.track_agent_usage(
+                user_id=user_id,
+                agent_id=agent_id or "unknown",
+                agent_name=agent_name,
+                input_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+                model=self.MODEL
+            )
+
+            # 8. Validate agent output
+            token_manager.validate_agent_output(agent_name, completion_tokens)
+
+            logger.info(
+                f"✅ {agent_name} completed: prompt={prompt_tokens}, "
+                f"completion={completion_tokens}, total={total_tokens}"
+            )
+
+            return {
+                "content": content,
+                "reasoning_details": reasoning_details,
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens
+                },
+                "model": self.MODEL,
+                "agent_name": agent_name
+            }
+
+        except QuotaExceededError:
             raise
         except Exception as e:
-            logger.error(f"Error calling Nemotron: {str(e)}")
-            raise
+            logger.error(f"❌ AI generation failed: {e}")
+            raise AIGenerationError(
+                "Failed to generate AI response",
+                details={"error": str(e), "agent": agent_name}
+            )
 
-    def _parse_ai_response(self, response: str, integrations: List[str]) -> Dict[str, Any]:
+    async def generate_with_context(
+        self,
+        messages: List[Dict[str, str]],
+        user_id: str,
+        agent_id: Optional[str] = None,
+        agent_name: str = "unknown",
+        preserve_reasoning: bool = True
+    ) -> Dict[str, Any]:
         """
-        Parse AI response into structured format
+        Generate response while preserving reasoning from previous messages
+
+        This is used for multi-turn conversations where reasoning should continue.
 
         Args:
-            response: Raw AI response
-            integrations: List of integrations
+            messages: Chat history including previous assistant messages with reasoning
+            user_id: User UUID
+            agent_id: Agent UUID
+            agent_name: Agent name
+            preserve_reasoning: Whether to preserve reasoning_details in context
 
         Returns:
-            Structured code data
+            Same format as generate()
         """
-        # Extract code (remove markdown if present)
-        code = response.strip()
-        if code.startswith("```python"):
-            code = code[9:]
-        if code.startswith("```"):
-            code = code[3:]
-        if code.endswith("```"):
-            code = code[:-3]
+        # Call generate with the full message history
+        # The model will see previous reasoning and continue from there
+        return await self.generate(
+            messages=messages,
+            user_id=user_id,
+            agent_id=agent_id,
+            agent_name=agent_name,
+            enable_reasoning=True
+        )
 
-        code = code.strip()
+    async def architect_generate(
+        self,
+        vibe_prompt: str,
+        user_id: str,
+        agent_id: str
+    ) -> Dict[str, Any]:
+        """
+        Agent 1: Architect - Design system architecture
 
-        # Generate requirements.txt
-        requirements = self._generate_requirements(integrations)
+        Allocation: 15% of output (750 tokens)
 
-        # Generate Dockerfile
-        dockerfile = self._generate_dockerfile()
+        Args:
+            vibe_prompt: User's natural language description
+            user_id: User UUID
+            agent_id: Agent UUID
+
+        Returns:
+            Architecture design document
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are the Architect Agent. Analyze the user's requirements and design "
+                    "a complete system architecture. Output a structured architecture document "
+                    "including: 1) System overview, 2) Component breakdown, 3) Data flow, "
+                    "4) Technology stack, 5) File structure. Be concise and technical."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"Design the architecture for:\n\n{vibe_prompt}"
+            }
+        ]
+
+        result = await self.generate(
+            messages=messages,
+            user_id=user_id,
+            agent_id=agent_id,
+            agent_name="architect",
+            enable_reasoning=True
+        )
 
         return {
-            "main.py": code,
-            "requirements.txt": requirements,
-            "Dockerfile": dockerfile,
-            "integrations": integrations
+            "architecture": result["content"],
+            "reasoning": result.get("reasoning_details"),
+            "usage": result["usage"]
         }
 
-    def _parse_integrations_response(self, response: str) -> List[str]:
-        """Parse integrations from AI response"""
-        import json
-        try:
-            # Try to parse as JSON array
-            integrations = json.loads(response.strip())
-            if isinstance(integrations, list):
-                return integrations
-        except:
-            pass
+    async def coder_generate(
+        self,
+        architecture: str,
+        vibe_prompt: str,
+        user_id: str,
+        agent_id: str
+    ) -> Dict[str, Any]:
+        """
+        Agent 2: Coder - Write production-ready code
 
-        # Fallback: extract words that match known integrations
-        known_integrations = [
-            "gmail", "slack", "twilio", "supabase", "google_sheets",
-            "airtable", "notion", "openai", "langchain", "render",
-            "vercel", "docker", "github", "razorpay", "stripe",
-            "sentry", "aws", "cloudflare"
+        Allocation: 70% of output (3,500 tokens)
+
+        Args:
+            architecture: Architecture from Agent 1
+            vibe_prompt: Original user prompt
+            user_id: User UUID
+            agent_id: Agent UUID
+
+        Returns:
+            Generated code
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are the Coder Agent. Implement the architecture with production-ready code. "
+                    "Write clean, documented, modular code following best practices. "
+                    "Include all necessary files, configurations, and dependencies."
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Original Request:\n{vibe_prompt}\n\n"
+                    f"Architecture:\n{architecture}\n\n"
+                    f"Implement this architecture with complete, working code."
+                )
+            }
         ]
 
-        detected = []
-        response_lower = response.lower()
-        for integration in known_integrations:
-            if integration in response_lower:
-                detected.append(integration)
+        result = await self.generate(
+            messages=messages,
+            user_id=user_id,
+            agent_id=agent_id,
+            agent_name="coder",
+            enable_reasoning=True
+        )
 
-        return detected
-
-    def _generate_requirements(self, integrations: List[str]) -> str:
-        """Generate requirements.txt based on integrations"""
-        base_requirements = [
-            "asyncio",
-            "aiohttp",
-            "python-dotenv"
-        ]
-
-        integration_packages = {
-            "gmail": ["google-api-python-client", "google-auth"],
-            "slack": ["slack-sdk"],
-            "twilio": ["twilio"],
-            "supabase": ["supabase"],
-            "google_sheets": ["gspread", "google-auth"],
-            "airtable": ["pyairtable"],
-            "notion": ["notion-client"],
-            "openai": ["openai"],
-            "langchain": ["langchain"],
-            "docker": ["docker"],
-            "aws": ["boto3"],
+        return {
+            "code": result["content"],
+            "reasoning": result.get("reasoning_details"),
+            "usage": result["usage"]
         }
 
-        requirements = set(base_requirements)
-        for integration in integrations:
-            if integration in integration_packages:
-                requirements.update(integration_packages[integration])
+    async def reviewer_generate(
+        self,
+        architecture: str,
+        code: str,
+        vibe_prompt: str,
+        user_id: str,
+        agent_id: str
+    ) -> Dict[str, Any]:
+        """
+        Agent 3: Reviewer - Review and improve code
 
-        return "\n".join(sorted(requirements))
+        Allocation: 15% of output (750 tokens)
 
-    def _generate_dockerfile(self) -> str:
-        """Generate Dockerfile for agent"""
-        return """FROM python:3.11-slim
+        Args:
+            architecture: Architecture from Agent 1
+            code: Code from Agent 2
+            vibe_prompt: Original user prompt
+            user_id: User UUID
+            agent_id: Agent UUID
 
-WORKDIR /app
+        Returns:
+            Review notes and final code
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are the Reviewer Agent. Review the code for correctness, best practices, "
+                    "security, and performance. Provide specific feedback and suggestions. "
+                    "Output: 1) Review summary, 2) Issues found, 3) Recommendations, 4) Final approval status."
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Original Request:\n{vibe_prompt}\n\n"
+                    f"Architecture:\n{architecture}\n\n"
+                    f"Code:\n{code}\n\n"
+                    f"Review this implementation thoroughly."
+                )
+            }
+        ]
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+        result = await self.generate(
+            messages=messages,
+            user_id=user_id,
+            agent_id=agent_id,
+            agent_name="reviewer",
+            enable_reasoning=True
+        )
 
-COPY . .
+        return {
+            "review": result["content"],
+            "reasoning": result.get("reasoning_details"),
+            "usage": result["usage"]
+        }
 
-CMD ["python", "main.py"]
-"""
+    def get_model_info(self) -> Dict[str, str]:
+        """Get information about the AI model being used"""
+        return {
+            "model": self.MODEL,
+            "provider": "OpenRouter",
+            "base_model": "NVIDIA Nemotron Nano 12B",
+            "features": ["reasoning", "free_tier", "vision"],
+            "base_url": self.BASE_URL
+        }
 
-    async def close(self):
-        """Close HTTP client"""
-        await self.client.aclose()
+
+# Global instance
+ai_service = AIService()
