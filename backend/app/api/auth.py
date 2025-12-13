@@ -37,28 +37,36 @@ def hash_password(password: str) -> str:
     """
     Hash password with bcrypt
 
-    Note: bcrypt has a 72-byte limit. Passwords longer than 72 bytes
-    are truncated to prevent ValueError during hashing.
+    Note: bcrypt has a 72-byte limit. For passwords >72 bytes,
+    we hash them with SHA256 first to create a fixed-size input.
     """
-    # Truncate password to 72 bytes for bcrypt compatibility
-    password_bytes = password.encode('utf-8')[:72]
-    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    import hashlib
 
-    return pwd_context.hash(password_truncated)
+    # Check if password exceeds bcrypt's 72-byte limit
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        # Hash long passwords with SHA256 first (creates 64-byte hex string)
+        password = hashlib.sha256(password_bytes).hexdigest()
+
+    return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verify password against bcrypt hash
 
-    Note: Applies same 72-byte truncation as hash_password()
-    to ensure passwords longer than 72 bytes can be verified.
+    Note: Applies same SHA256 hashing as hash_password()
+    for passwords >72 bytes to ensure verification works.
     """
-    # Truncate password to 72 bytes for bcrypt compatibility
-    password_bytes = plain_password.encode('utf-8')[:72]
-    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    import hashlib
 
-    return pwd_context.verify(password_truncated, hashed_password)
+    # Apply same transformation as hash_password()
+    password_bytes = plain_password.encode('utf-8')
+    if len(password_bytes) > 72:
+        # Hash long passwords with SHA256 first (same as hash_password)
+        plain_password = hashlib.sha256(password_bytes).hexdigest()
+
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(
