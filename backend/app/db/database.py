@@ -37,6 +37,7 @@ def init_database():
             max_overflow=10,            # 10 additional connections on demand
             pool_recycle=3600,          # Recycle connections after 1 hour (Supabase best practice)
             connect_args={
+                "statement_cache_size": 0,  # Required for pgbouncer compatibility (Supabase)
                 "server_settings": {
                     "application_name": "noderush_backend"
                 }
