@@ -34,13 +34,31 @@ logger = get_logger(__name__)
 
 
 def hash_password(password: str) -> str:
-    """Hash password"""
-    return pwd_context.hash(password)
+    """
+    Hash password with bcrypt
+
+    Note: bcrypt has a 72-byte limit. Passwords longer than 72 bytes
+    are truncated to prevent ValueError during hashing.
+    """
+    # Truncate password to 72 bytes for bcrypt compatibility
+    password_bytes = password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+
+    return pwd_context.hash(password_truncated)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password"""
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    Verify password against bcrypt hash
+
+    Note: Applies same 72-byte truncation as hash_password()
+    to ensure passwords longer than 72 bytes can be verified.
+    """
+    # Truncate password to 72 bytes for bcrypt compatibility
+    password_bytes = plain_password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+
+    return pwd_context.verify(password_truncated, hashed_password)
 
 
 def create_access_token(

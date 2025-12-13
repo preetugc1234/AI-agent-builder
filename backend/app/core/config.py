@@ -26,8 +26,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "https://noderush.vercel.app",
-        # Add your Vercel deployment URL when deployed
-        # "https://your-app.vercel.app",
+        "https://ai-agent-builder-ugag.onrender.com",  # Backend URL for self-origin requests
     ]
 
     @field_validator("CORS_ORIGINS", mode="before")
