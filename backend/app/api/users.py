@@ -20,6 +20,7 @@ from app.core.exceptions import (
 )
 from app.services.audit_service import audit_service
 from app.services.redis_service import redis_service
+from app.services.quota_service import get_quota_service, QuotaType
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -496,3 +497,120 @@ async def delete_user_account(
         await db.rollback()
         request_logger.exception("Account deletion failed with database error")
         raise
+
+
+@router.get("/me/quotas")
+async def get_user_quotas(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get real-time quota usage for the current user
+
+    **Quota Types**:
+    - agents:total - Total agents allowed
+    - agents:create_hour - Agent creations per hour
+    - agents:create_day - Agent creations per day
+    - executions:hour - Executions per hour
+    - executions:day - Executions per day
+    - ai_tokens:day - AI tokens per day
+    - storage:mb - Storage in MB
+    - websocket:concurrent - Concurrent WebSocket connections
+
+    **Response Includes**:
+    - Current usage for each quota type
+    - Limits based on subscription tier
+    - Percentage usage
+    - Warnings for quotas > 80%
+    - Blocked quotas at 100%
+    """
+    request_logger = logger.bind(
+        request_id=getattr(request.state, "request_id", "unknown"),
+        user_id=str(current_user.id)
+    )
+
+    request_logger.info("Get user quotas request received")
+
+    # Get quota service
+    quota_service = get_quota_service()
+
+    if not quota_service:
+        return {
+            "status": "unavailable",
+            "message": "Quota service not available",
+            "tier": current_user.subscription_tier,
+            "quotas": {}
+        }
+
+    # Get usage summary
+    summary = await quota_service.get_usage_summary(
+        user_id=str(current_user.id),
+        tier=current_user.subscription_tier
+    )
+
+    request_logger.info(
+        "User quotas fetched successfully",
+        warnings=len(summary.get("warnings", [])),
+        blocked=len(summary.get("blocked", []))
+    )
+
+    return {
+        "status": "ok",
+        "user_id": str(current_user.id),
+        "tier": current_user.subscription_tier,
+        "quotas": summary["quotas"],
+        "warnings": summary["warnings"],
+        "blocked": summary["blocked"],
+        "upgrade_url": "/pricing" if summary["blocked"] or summary["warnings"] else None
+    }
+
+
+@router.post("/me/quotas/reset/{quota_type}")
+async def reset_user_quota(
+    quota_type: str,
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Reset a specific quota (admin only or for testing)
+
+    **Note**: This endpoint is only available for users with admin privileges
+    or during testing. In production, quotas reset automatically based on
+    their TTL (hourly, daily, etc.)
+    """
+    request_logger = logger.bind(
+        request_id=getattr(request.state, "request_id", "unknown"),
+        user_id=str(current_user.id)
+    )
+
+    # Only allow for enterprise users (for testing) or admins
+    if current_user.subscription_tier not in ["enterprise", "admin"]:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403,
+            detail="Only enterprise users can manually reset quotas"
+        )
+
+    quota_service = get_quota_service()
+
+    if not quota_service:
+        return {"status": "error", "message": "Quota service not available"}
+
+    # Reset the quota
+    success = await quota_service.reset_quota(
+        user_id=str(current_user.id),
+        quota_type=quota_type
+    )
+
+    if success:
+        request_logger.info(f"Quota {quota_type} reset successfully")
+        return {
+            "status": "ok",
+            "message": f"Quota {quota_type} reset successfully",
+            "quota_type": quota_type
+        }
+    else:
+        return {
+            "status": "error",
+            "message": f"Failed to reset quota {quota_type}"
+        }

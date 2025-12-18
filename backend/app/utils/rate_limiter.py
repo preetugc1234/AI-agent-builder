@@ -674,3 +674,152 @@ def init_rate_limiter(redis_service) -> TokenBucketRateLimiter:
 def get_rate_limiter() -> Optional[TokenBucketRateLimiter]:
     """Get the rate limiter singleton"""
     return rate_limiter
+
+
+def require_quota(
+    quota_type: str,
+    required: int = 1,
+    increment_on_success: bool = True
+):
+    """
+    Quota enforcement decorator for FastAPI endpoints
+
+    Usage:
+        @app.post("/api/agents")
+        @require_quota(quota_type="agents:total", required=1)
+        async def create_agent(request: Request):
+            ...
+
+    Args:
+        quota_type: Type of quota to check (e.g., 'agents:total', 'executions:hour')
+        required: Amount required for this operation (default 1)
+        increment_on_success: Increment quota after successful operation (default True)
+    """
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Get request from args or kwargs
+            request = kwargs.get("request")
+            if request is None:
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                        break
+
+            if request is None:
+                # No request object, can't check quota
+                return await func(*args, **kwargs)
+
+            # Get quota service from app state
+            quota_service = getattr(request.app.state, "quota_service", None)
+            if quota_service is None:
+                # Quota service not configured, allow request
+                return await func(*args, **kwargs)
+
+            # Get user from request state
+            user = getattr(request.state, "user", None)
+            if user is None:
+                # No user, can't check per-user quota
+                return await func(*args, **kwargs)
+
+            user_id = str(getattr(user, "id", "unknown"))
+            tier = getattr(user, "subscription_tier", "free")
+
+            # Check quota
+            result = await quota_service.check_quota(
+                user_id=user_id,
+                quota_type=quota_type,
+                tier=tier,
+                required=required
+            )
+
+            if not result.allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "QUOTA_EXCEEDED",
+                        "message": result.message or f"Quota exceeded for {quota_type}",
+                        "quota_type": quota_type,
+                        "current": result.current,
+                        "limit": result.limit,
+                        "remaining": result.remaining,
+                        "tier": tier,
+                        "reset_at": result.reset_at
+                    },
+                    headers={
+                        "X-Quota-Limit": str(result.limit),
+                        "X-Quota-Remaining": str(result.remaining),
+                        "X-Quota-Type": quota_type,
+                    }
+                )
+
+            # Call the actual function
+            response = await func(*args, **kwargs)
+
+            # Increment quota on success
+            if increment_on_success:
+                await quota_service.increment_quota(
+                    user_id=user_id,
+                    quota_type=quota_type,
+                    amount=required
+                )
+
+            # Add quota headers to response if possible
+            if isinstance(response, Response):
+                response.headers["X-Quota-Limit"] = str(result.limit)
+                response.headers["X-Quota-Remaining"] = str(max(0, result.remaining - required))
+                response.headers["X-Quota-Type"] = quota_type
+
+            return response
+
+        return wrapper
+    return decorator
+
+
+def rate_limit_and_quota(
+    rate_resource: str = "api:general",
+    quota_type: Optional[str] = None,
+    rate_limit_value: Optional[int] = None,
+    quota_required: int = 1,
+    rate_cost: int = 1,
+    increment_quota: bool = True
+):
+    """
+    Combined rate limit and quota decorator
+
+    Usage:
+        @app.post("/api/agents")
+        @rate_limit_and_quota(
+            rate_resource="agent:create",
+            quota_type="agents:total"
+        )
+        async def create_agent(request: Request):
+            ...
+
+    Args:
+        rate_resource: Resource for rate limiting
+        quota_type: Type of quota to check (optional)
+        rate_limit_value: Override rate limit (uses preset if not provided)
+        quota_required: Amount required for quota
+        rate_cost: Token cost for rate limit
+        increment_quota: Increment quota on success
+    """
+    def decorator(func: Callable):
+        # Apply rate limit decorator
+        rate_decorated = rate_limit(
+            resource=rate_resource,
+            limit=rate_limit_value,
+            cost=rate_cost
+        )(func)
+
+        # Apply quota decorator if quota_type provided
+        if quota_type:
+            quota_decorated = require_quota(
+                quota_type=quota_type,
+                required=quota_required,
+                increment_on_success=increment_quota
+            )(rate_decorated)
+            return quota_decorated
+
+        return rate_decorated
+    return decorator

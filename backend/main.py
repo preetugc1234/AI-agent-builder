@@ -16,6 +16,7 @@ from app.core.error_handlers import register_error_handlers
 from app.db import database as db  # Import module, not variables
 from app.api import agents, auth, analytics, users
 from app.services.redis_service import redis_service
+from app.services.quota_service import init_quota_service
 from app.websockets.manager import manager
 from app.utils.rate_limiter import init_rate_limiter, rate_limit_middleware
 
@@ -46,9 +47,15 @@ async def lifespan(app: FastAPI):
         rate_limiter = init_rate_limiter(redis_service)
         app.state.rate_limiter = rate_limiter
         logger.info("✅ Rate limiter initialized")
+
+        # Initialize quota service
+        quota_svc = init_quota_service(redis_service)
+        app.state.quota_service = quota_svc
+        logger.info("✅ Quota service initialized")
     else:
         logger.warning("⚠️ Redis connection failed - running without Redis")
         app.state.rate_limiter = None
+        app.state.quota_service = None
 
     # Initialize database (Supabase PostgreSQL)
     db_initialized = False
@@ -172,6 +179,13 @@ async def health_check():
     checks["rate_limiter"] = {
         "status": "healthy" if rate_limiter else "disabled",
         "message": "Token bucket rate limiter active" if rate_limiter else "Rate limiting disabled"
+    }
+
+    # Check Quota Service
+    quota_svc = getattr(app.state, "quota_service", None)
+    checks["quota_service"] = {
+        "status": "healthy" if quota_svc else "disabled",
+        "message": "Per-user quota service active" if quota_svc else "Quota service disabled"
     }
 
     # Determine overall status
