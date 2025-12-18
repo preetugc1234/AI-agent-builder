@@ -17,6 +17,7 @@ from app.db import database as db  # Import module, not variables
 from app.api import agents, auth, analytics, users
 from app.services.redis_service import redis_service
 from app.websockets.manager import manager
+from app.utils.rate_limiter import init_rate_limiter, rate_limit_middleware
 
 # Setup structured logging
 setup_logging(
@@ -40,8 +41,14 @@ async def lifespan(app: FastAPI):
         # Inject Redis into WebSocket manager
         manager.set_redis_service(redis_service)
         logger.info("✅ Redis connected and integrated with WebSocket manager")
+
+        # Initialize rate limiter
+        rate_limiter = init_rate_limiter(redis_service)
+        app.state.rate_limiter = rate_limiter
+        logger.info("✅ Rate limiter initialized")
     else:
         logger.warning("⚠️ Redis connection failed - running without Redis")
+        app.state.rate_limiter = None
 
     # Initialize database (Supabase PostgreSQL)
     db_initialized = False
@@ -91,6 +98,9 @@ setup_cors_middleware(app, settings.CORS_ORIGINS)
 
 # Setup security middleware (logging, headers, etc.)
 setup_security_middleware(app)
+
+# Setup rate limiting middleware (global rate limit)
+app.middleware("http")(rate_limit_middleware)
 
 # Register error handlers
 register_error_handlers(app)
@@ -156,6 +166,13 @@ async def health_check():
             "status": "unhealthy",
             "message": f"Redis connection failed: {str(e)}"
         }
+
+    # Check Rate Limiter
+    rate_limiter = getattr(app.state, "rate_limiter", None)
+    checks["rate_limiter"] = {
+        "status": "healthy" if rate_limiter else "disabled",
+        "message": "Token bucket rate limiter active" if rate_limiter else "Rate limiting disabled"
+    }
 
     # Determine overall status
     statuses = [check["status"] for check in checks.values()]
